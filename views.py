@@ -4,6 +4,10 @@ from django.template import loader
 from django.urls import reverse
 from .models import new_LLM, Convert_LLM, Reverse_LLM, LLM_choice
 from .forms import llm_textbox
+import html
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 import ollama
 
@@ -25,11 +29,13 @@ def convert_num_view(request, pk):
         form = llm_textbox(request.POST)
         if form.is_valid():
             input_str = form.cleaned_data.get("input_string", "")
+            secure_str = html.escape(input_str)
             result_num = len(input_str)
             response.new_string = input_str
             response.new_number = result_num
+            response.objects.filter(pk=pk).update(new_string=input_str, new_number=result_num)
             response.save()
-            return HttpResponseRedirect(reverse("django_llm:convertstr", args=(response.pk,)))
+            return HttpResponseRedirect(reverse("django_llm:convertstr", f"{secure_str}", args=(response.pk,)))
     else:
         form = llm_textbox(initial={"input_string": input_str})
 
@@ -67,6 +73,7 @@ def amount_view(request, pk):
         )
     else:
         selected_amount.amount += 1
+        selected_amount.objects.filter(pk=amount_id).update(amount=selected_amount.amount)
         selected_amount.save()
         return HttpResponseRedirect(reverse("django_llm:results", args=(response.id,)))
     # If there is no post data, then just return the page with the form:
