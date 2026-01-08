@@ -27,6 +27,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# SECURITY FEATURES
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+# I was able add security features, however I am having an issue getting it to work on HTTPS instead of HTTP.
 
 # Application definition
 
@@ -38,6 +43,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
