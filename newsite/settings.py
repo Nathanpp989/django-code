@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"
+# SECRET_KEY = os.environ["django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"] this is causing an error
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -31,7 +33,7 @@ ALLOWED_HOSTS = []
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-# I was able add security features, however I am having an issue getting it to work on HTTPS instead of HTTP.
+# I added a certificate for localhost to test these features but it may need to be debugged
 
 # Application definition
 
@@ -42,9 +44,11 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
+    "daphne",
     "django.contrib.staticfiles",
     "django_extensions",
 ]
+ASGI_APPLICATION = "newsite.asgi.application"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -54,6 +58,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_http2.middleware.HTTP2Middleware",
 ]
 
 ROOT_URLCONF = "newsite.urls"
@@ -128,3 +133,5 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Installed a new server and use: daphne newsite.asgi:application and runserver for deployment
