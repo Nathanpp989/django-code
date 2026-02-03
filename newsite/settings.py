@@ -21,30 +21,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"
-# SECRET_KEY = os.environ["django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"] this is causing an error
+# SECRET_KEY = "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1'] if DEBUG else []
 
 # SECURITY FEATURES
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 # I added a certificate for localhost to test these features but it may need to be debugged
 
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django_llm.apps.DjangoLlmConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "daphne",
     "django.contrib.staticfiles",
     "django_extensions",
 ]
@@ -58,7 +58,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "django_http2.middleware.HTTP2Middleware",
+    # "django_http2.middleware.HTTP2Middleware",
 ]
 
 ROOT_URLCONF = "newsite.urls"
@@ -128,6 +128,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
