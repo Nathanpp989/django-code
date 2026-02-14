@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,12 +23,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # SECRET_KEY = "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj"
+load_dotenv()
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-q)gx0_67y#h9!cr-63ao7fv$+4u!1thi2j)k2p838=7pt1l+pj")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] if DEBUG else []
+ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")]
+
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # SECURITY FEATURES
 SECURE_SSL_REDIRECT = not DEBUG
@@ -38,7 +43,6 @@ CSRF_COOKIE_SECURE = not DEBUG
 # Application definition
 
 INSTALLED_APPS = [
-    "daphne",
     "django_llm.apps.DjangoLlmConfig",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -48,10 +52,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_extensions",
 ]
-ASGI_APPLICATION = "newsite.asgi.application"
+# ASGI_APPLICATION = "newsite.asgi.application"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -129,6 +134,9 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Whitenoise configurations
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field

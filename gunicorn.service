@@ -1,0 +1,17 @@
+[Unit]
+Description=gunicorn daemon for Django_code
+After=network.target
+
+User=your_user
+Group=your_group
+WorkingDirectory=/Users/nathankatzman/Django_code
+ExecStart=/path/to/venv/bin/gunicorn \
+          --workers=3 \
+          --bind unix:/Users/nathankatzman/Django_code \
+          --log-level=error \
+          --access-logfile=/Users/nathankatzman/Django_code/gunicorn_access.log \
+          --error-logfile=/Users/nathankatzman/Django_code/gunicorn_error.log \
+          your_project.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
