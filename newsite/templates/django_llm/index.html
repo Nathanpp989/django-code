@@ -1,0 +1,20 @@
+{% load static %}
+{% csrf_token %}
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>Simple LLama3.2 Django server</title>
+    <link rel="stylesheet" href="{% static 'django_llm/style.css' %}">
+</head>
+<body>
+    <div id = "django_server">
+    <h1>Server source:</h1>
+    <br>
+    <a href="http://127.0.0.1:8000/mcp">Link to the server</a>
+    <p style = "font-family: Arial;">The point of this server is to get the server to work with django.</p>
+    <p>This will be added onto in order to make a working llm server that uses MCP.</p>
+    </div>
+</body>
+</html>
+{% load static %}
