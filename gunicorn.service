@@ -11,7 +11,7 @@ ExecStart=/path/to/venv/bin/gunicorn \
           --log-level=error \
           --access-logfile=/Users/nathankatzman/Django_code/gunicorn_access.log \
           --error-logfile=/Users/nathankatzman/Django_code/gunicorn_error.log \
-          your_project.wsgi:application
+          newsite.wsgi:application
 
 [Install]
 WantedBy=multi-user.target
