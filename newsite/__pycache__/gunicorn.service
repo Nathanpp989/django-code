@@ -1,0 +1,17 @@
+[Unit]
+Description=gunicorn daemon for your_project
+After=network.target
+
+User=Nathan
+Group=Permalytics
+WorkingDirectory=Users/nathankatzman/Django_code
+ExecStart=/path/to/venv/bin/gunicorn \
+          --workers=3 \
+          --bind unix:/Users/nathankatzman/Django_code/django_llm/your_project.sock \
+          --log-level=error \
+          --access-logfile=/Users/nathankatzman/Django_code/django_llm/gunicorn_access.log \
+          --error-logfile=/Users/Nathankatzman/Django_code/django_llm/gunicorn_error.log \
+          your_project.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
