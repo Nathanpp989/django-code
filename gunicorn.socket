@@ -1,0 +1,12 @@
+[Unit]
+Description=gunicorn socket for Django_code
+After=network.target
+
+[Socket]
+ListenStream=/workspaces/Django_code/newDjango/gunicorn.sock
+SocketUser=codespace
+SocketGroup=codespace
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

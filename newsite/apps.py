@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 
 
-class DjangoLlmConfig(AppConfig):
+class NewsiteConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = "django_llm"
+    name = "newsite"

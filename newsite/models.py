@@ -5,11 +5,18 @@ from datetime import timedelta
 # Create your models here.
 class new_LLM(models.Model):
     llm_text = models.CharField(max_length=200)
-    llm_type = models.DateTimeField("Model_date_used:")
+    llm_type = models.DateTimeField("Model_date_used:", default=timezone.now)
+    @property
+    def llm_date_used(self):
+        return self.llm_type
+
+    @llm_date_used.setter
+    def llm_date_used(self, value):
+        self.llm_type = value
     def __str__(self):
         return self.llm_text
     def was_published_recently(self):
-        return self.llm_type >= timezone.now() - timedelta(days=1)
+        return self.llm_type <= timezone.now() and self.llm_type >= timezone.now() - timedelta(days=1)
 
 class LLM_choice(models.Model):
     new_llm = models.ForeignKey(new_LLM, on_delete=models.CASCADE, related_name='choices')
@@ -20,13 +27,13 @@ class LLM_choice(models.Model):
     
 #These models will be used to test out the capability of the LLM with django
 class Convert_LLM(models.Model):
-    new_string = models.CharField(max_length=256)
+    new_string = models.CharField(max_length=256, default="")
     new_number = models.IntegerField(null=True, blank=True)
     def __str__(self):
         return self.new_string
     
 class Reverse_LLM(models.Model):
     new_number = models.IntegerField()
-    new_string= models.CharField(max_length=256, null=True, blank=True)
+    new_string = models.CharField(max_length=256, null=True, blank=True)
     def __str__(self):
         return self.new_string

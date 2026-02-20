@@ -45,6 +45,7 @@ CSRF_COOKIE_SECURE = not DEBUG
 
 INSTALLED_APPS = [
     "django_llm.apps.DjangoLlmConfig",
+    "newsite.apps.NewsiteConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

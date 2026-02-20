@@ -2,16 +2,22 @@
 Description=gunicorn daemon for Django_code
 After=network.target
 
-User=your_user
-Group=your_group
-WorkingDirectory=/Users/nathankatzman/Django_code
-ExecStart=/path/to/venv/bin/gunicorn \
-          --workers=3 \
-          --bind unix:/Users/nathankatzman/Django_code \
-          --log-level=error \
-          --access-logfile=/Users/nathankatzman/Django_code/gunicorn_access.log \
-          --error-logfile=/Users/nathankatzman/Django_code/gunicorn_error.log \
+
+[Service]
+User=codespace
+Group=codespace
+WorkingDirectory=/workspaces/Django_code/newDjango
+ExecStart=/home/codespace/.python/current/bin/gunicorn \
+          --chdir /workspaces/Django_code/newDjango \
+          --workers 3 \
+          --bind unix:/workspaces/Django_code/newDjango/gunicorn.sock \
+          --log-level error \
+          --access-logfile /workspaces/Django_code/newDjango/gunicorn_access.log \
+          --error-logfile /workspaces/Django_code/newDjango/gunicorn_error.log \
           newsite.wsgi:application
+
+Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
