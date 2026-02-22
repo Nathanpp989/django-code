@@ -1,0 +1,8 @@
+<!DOCTYPE html>
+<form action="{url 'django_llm:results' django_llm.id %}" method="POST">
+    {% csrf_token %}
+    <fieldset>
+        <p>This will store the html for the result view</p>
+    </fieldset>
+    <input type="submit" value="amount">
+</form>
