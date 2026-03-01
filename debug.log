@@ -1,0 +1,5 @@
+WARNING 2026-03-01 15:34:42,760 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-01 15:34:48,615 log Not Found: /accounts/login/
+WARNING 2026-03-01 15:34:59,210 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-01 15:35:04,947 log Not Found: /accounts/login/
+WARNING 2026-03-01 15:44:59,183 log Not Found: /static/django_llm/style.css

@@ -1,9 +1,19 @@
-Django==6.0.2
-django-extensions==4.1
-ollama==0.6.1
-python-dotenv==1.2.1
-whitenoise==6.11.0
-daphne==4.2.1
-gunicorn==25.1.0
-waitress==3.0.2
-psycopg2-binary==2.9.11
+# Core
+django>=4.1.6
+
+# Database
+psycopg2-binary
+dj-database-url
+
+# Environment variables
+python-dotenv
+
+# Server
+gunicorn
+whitenoise
+
+# LLM
+ollama
+
+# Development tools
+django-extensions
