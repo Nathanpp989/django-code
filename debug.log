@@ -7,3 +7,6 @@ WARNING 2026-03-01 23:28:41,901 log Not Found: /static/django_llm/style.css
 WARNING 2026-03-01 23:48:07,216 log Not Found: /static/django_llm/style.css
 WARNING 2026-03-01 23:48:10,419 log Not Found: /mcp
 WARNING 2026-03-02 00:06:28,669 log Not Found: /mcp
+WARNING 2026-03-02 19:45:10,302 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-02 19:46:39,465 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-02 19:46:40,473 log Not Found: /mcp
