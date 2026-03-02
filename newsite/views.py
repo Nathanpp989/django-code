@@ -17,6 +17,29 @@ except Exception:
     OLLAMA_AVAILABLE = False
 
 
+def get_ollama_summary(prompt: str) -> str:
+    """
+    Helper function to call Ollama with a given prompt.
+    Returns the response text or an error message if Ollama is unavailable.
+    """
+    if not OLLAMA_AVAILABLE:
+        return "Ollama is not available. Please install it to use LLM features."
+    try:
+        response = ollama.chat(
+            model="llama3",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+        return response["message"]["content"]
+    except Exception as e:
+        logger.error(f"Ollama error: {e}")
+        return f"LLM error: {str(e)}"
+
+
 def index_view(request):
     context = {
         "message": "This will eventually use a LLM and MCP server.",
@@ -31,12 +54,24 @@ def convert_num_view(request, pk):
 
     result_num = response.new_number or 0
     input_str = response.new_string or ""
+    llm_summary = None
 
     if request.method == 'POST':
         form = llm_textbox(request.POST)
         if form.is_valid():
             input_str = form.cleaned_data.get("input_string", "")
             result_num = len(input_str)
+
+            # Get LLM summary of the input string
+            if input_str:
+                prompt = (
+                    f"Please analyse the following text and provide a brief summary "
+                    f"of its content, tone, and key points in 2-3 sentences:\n\n"
+                    f"{input_str}"
+                )
+                llm_summary = get_ollama_summary(prompt)
+                logger.debug(f"Ollama summary generated for ConvertLLM pk={pk}")
+
             response.new_string = input_str
             response.new_number = result_num
             try:
@@ -44,16 +79,25 @@ def convert_num_view(request, pk):
                 messages.success(request, "Saved successfully.")
             except Exception as e:
                 logger.error(f"Failed to save ConvertLLM pk={pk}: {e}")
-                messages.error(request, "An error occurred while saving")
+                messages.error(request, "An error occurred while saving. Please try again.")
+
+            # Pass summary through redirect via session
+            if llm_summary:
+                request.session["llm_summary"] = llm_summary
+
             return redirect("django_llm:convertstr", response.pk)
     else:
         form = llm_textbox(initial={"input_string": input_str})
+        # Retrieve summary from session if redirected
+        llm_summary = request.session.pop("llm_summary", None)
 
     context = {
         "response": response,
         "form": form,
         "result_num": result_num,
         "input_str": input_str,
+        "llm_summary": llm_summary,
+        "ollama_available": OLLAMA_AVAILABLE,
     }
     return render(request, "django_llm/convertstr.html", context)
 
@@ -70,9 +114,28 @@ def detail_view(request, pk):
 @login_required
 def results_view(request, pk):
     response = get_object_or_404(NewLLM, pk=pk)
+    amounts = response.choices.all()
+
+    # Build a summary of voting results for Ollama
+    llm_summary = None
+    if amounts.exists():
+        results_text = "\n".join(
+            [f"- {choice.choice_text}: {choice.amount} votes" for choice in amounts]
+        )
+        prompt = (
+            f"The following are the voting results for '{response.llm_text}':\n\n"
+            f"{results_text}\n\n"
+            f"Please provide a brief 2-3 sentence summary of these results, "
+            f"highlighting the most popular choice and any notable patterns."
+        )
+        llm_summary = get_ollama_summary(prompt)
+        logger.debug(f"Ollama results summary generated for NewLLM pk={pk}")
+
     return render(request, "django_llm/results.html", {
         "response": response,
-        "amounts": response.choices.all(),
+        "amounts": amounts,
+        "llm_summary": llm_summary,
+        "ollama_available": OLLAMA_AVAILABLE,
     })
 
 

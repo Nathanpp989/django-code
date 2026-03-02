@@ -3,3 +3,7 @@ WARNING 2026-03-01 15:34:48,615 log Not Found: /accounts/login/
 WARNING 2026-03-01 15:34:59,210 log Not Found: /static/django_llm/style.css
 WARNING 2026-03-01 15:35:04,947 log Not Found: /accounts/login/
 WARNING 2026-03-01 15:44:59,183 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-01 23:28:41,901 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-01 23:48:07,216 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-01 23:48:10,419 log Not Found: /mcp
+WARNING 2026-03-02 00:06:28,669 log Not Found: /mcp
