@@ -1,8 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Results - {{ response.llm_text }}{% endblock %}
+{% block content %}
 <!DOCTYPE html>
-<form action="{url 'django_llm:results' django_llm.id %}" method="POST">
-    {% csrf_token %}
-    <fieldset>
-        <p>This will store the html for the result view</p>
-    </fieldset>
-    <input type="submit" value="amount">
-</form>
+<div class="card">
+    <h2>Results: {{ response.llm_text }}</h2>
+    <ul>
+        {% for choice in amounts %}
+            <li>{{ choice.choice_text }} — {{ choice.amount }} vote{{ choice.amount|pluralize }}</li>
+        {% endfor %}
+    </ul>
+    <a href="{% url 'django_llm:detail' response.pk %}">Vote again</a>
+</div>
+{% if llm_summary %}
+    <div class="llm-summary">
+        <h3>AI Summary of Results</h3>
+        <p>{{ llm_summary }}</p>
+    </div>
+{% endif %}
+{% if not ollama_available %}
+    <div class="llm-unavailable">Ollama is not available. LLM summaries will not be generated.</div>
+{% endif %}
+{% endblock %}

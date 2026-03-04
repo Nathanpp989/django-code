@@ -7,5 +7,5 @@ urlpatterns = [
     path("<int:pk>/", views.detail_view, name="detail"),
     path("<int:pk>/results/", views.results_view, name="results"),
     path("<int:pk>/amount/", views.amount_view, name="amount"),
-    path("<int:pk>/convertstr/", views.convert_num_view, name="convertstr")
+    path("<int:pk>/convertstr/", views.convert_num_view, name="convertstr"),
 ]

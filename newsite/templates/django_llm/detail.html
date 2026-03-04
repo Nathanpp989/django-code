@@ -1,8 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ response.llm_text }}{% endblock %}
+{% block content %}
 <!DOCTYPE html>
-<form action="{url 'django_llm:amount' django_llm.id %}" method="POST">
-    {% csrf_token %}
-    <fieldset>
-        <p>This will store the html for the detail view</p>
-    </fieldset>
-    <input type="submit" value="amount">
-</form>
+<div class="card">
+    <h2>{{ response.llm_text }}</h2>
+    <p><em>Date used: {{ response.llm_date_used }}</em></p>
+    {% if error_message %}
+        <div class="message-error">{{ error_message }}</div>
+    {% endif %}
+    <form method="post" action="{% url 'django_llm:amount' response.pk %}">
+        {% csrf_token %}
+        {% for choice in amounts %}
+            <div>
+                <input type="radio" name="amount" id="choice{{ forloop.counter }}" value="{{ choice.pk }}">
+                <label for="choice{{ forloop.counter }}">{{ choice.choice_text }} ({{ choice.amount }} votes)</label>
+            </div>
+        {% endfor %}
+        <br>
+        <input type="submit" value="Vote">
+    </form>
+</div>
+{% endblock %}
