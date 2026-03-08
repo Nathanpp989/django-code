@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import F
-from .models import NewLLM, ConvertLLM, ReverseLLM, LLMChoice
+from .models import NewLLM, ConvertLLM, LLMChoice
 from .forms import llm_textbox
 import logging
 
@@ -17,22 +17,14 @@ except Exception:
     OLLAMA_AVAILABLE = False
 
 
-def get_ollama_summary(prompt: str) -> str:
-    """
-    Helper function to call Ollama with a given prompt.
-    Returns the response text or an error message if Ollama is unavailable.
-    """
+def get_ollama_summary(prompt: str, timeout: int = 30) -> str:
     if not OLLAMA_AVAILABLE:
-        return "Ollama is not available. Please install it to use LLM features."
+        return "Ollama is not available, install it to use LLM features."
     try:
         response = ollama.chat(
             model="llama3",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+            messages=[{"role": "user", "content": prompt}],
+            options={"num_predict": 200}  # limit response length
         )
         return response["message"]["content"]
     except Exception as e:
@@ -65,12 +57,12 @@ def convert_num_view(request, pk):
             # Get LLM summary of the input string
             if input_str:
                 prompt = (
-                    f"Please analyse the following text and provide a brief summary "
-                    f"of its content, tone, and key points in 2-3 sentences:\n\n"
+                    f"Please provide a brief summary "
+                    f"of its content and key points in 2-3 sentences:\n\n"
                     f"{input_str}"
                 )
                 llm_summary = get_ollama_summary(prompt)
-                logger.debug(f"Ollama summary generated for ConvertLLM pk={pk}")
+                logger.debug(f"Ollama summary created for ConvertLLM pk={pk}")
 
             response.new_string = input_str
             response.new_number = result_num
@@ -79,7 +71,7 @@ def convert_num_view(request, pk):
                 messages.success(request, "Saved successfully.")
             except Exception as e:
                 logger.error(f"Failed to save ConvertLLM pk={pk}: {e}")
-                messages.error(request, "An error occurred while saving. Please try again.")
+                messages.error(request, "An error occurred while saving.")
 
             # Pass summary through redirect via session
             if llm_summary:

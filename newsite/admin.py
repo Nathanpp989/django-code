@@ -2,6 +2,8 @@ from django.contrib import admin
 from .models import NewLLM
 
 # Register your models here.
+
+
 class llm_admin(admin.ModelAdmin):
 
     fieldsets = [

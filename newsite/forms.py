@@ -1,5 +1,6 @@
 from django import forms
 
+
 class llm_textbox(forms.Form):
     input_string = forms.CharField(
         label='Input string',
