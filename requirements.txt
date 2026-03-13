@@ -12,8 +12,23 @@ python-dotenv
 gunicorn
 whitenoise
 
-# LLM
+# LLM and MCP
 ollama
+mcp
+
+# Caching
+django-redis
+redis
 
 # Development tools
 django-extensions
+django-debug-toolbar
+
+# Testing
+pytest
+pytest-django
+coverage
+
+# Code quality
+black
+flake8
