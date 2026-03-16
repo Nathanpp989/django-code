@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Django LLM{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+
+    <!-- Header -->
+    <div class="chat-header card">
+        <div class="chat-header-left">
+            <h2>Django LLM Chat</h2>
+            <div class="status-indicators">
+                {% if ollama_available %}
+                    <span class="status-badge status-on">Ollama Online</span>
+                {% else %}
+                    <span class="status-badge status-off">Ollama Offline</span>
+                {% endif %}
+                {% if mcp_available %}
+                    <span class="status-badge status-on">MCP Online</span>
+                {% else %}
+                    <span class="status-badge status-off">MCP Offline</span>
+                {% endif %}
+            </div>
+        </div>
+        <button id="clear-btn" class="btn-danger" title="Clear chat history">
+            Clear History
+        </button>
+    </div>
+
+    <!-- Suggested prompts -->
+    <div class="suggestions card">
+        <p><strong>Try asking:</strong></p>
+        <div class="suggestion-chips">
+            <button class="chip" onclick="setPrompt('Give me an overview of the database')">
+                Database overview
+            </button>
+            <button class="chip" onclick="setPrompt('What are the top voted choices?')">
+                Top voted choices
+            </button>
+            <button class="chip" onclick="setPrompt('Show me the recent conversion history')">
+                Conversion history
+            </button>
+            <button class="chip" onclick="setPrompt('What are the overall database statistics?')">
+                Database statistics
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat messages -->
+    <div class="chat-messages card" id="chat-messages">
+        {% if not chat_history %}
+            <div class="empty-state" id="empty-state">
+                <p>No messages yet. Start a conversation below.</p>
+            </div>
+        {% endif %}
+
+        {% for message in chat_history %}
+            <div class="message message-{{ message.role }}" id="msg-{{ message.pk }}">
+                <div class="message-meta">
+                    {% if message.role == "user" %}
+                        <span class="message-author">You</span>
+                    {% else %}
+                        <span class="message-author">AI Assistant</span>
+                    {% endif %}
+                    <span class="message-time">
+                        {{ message.created_at|date:"H:i" }}
+                    </span>
+                </div>
+                <div class="message-content">{{ message.content }}</div>
+            </div>
+        {% endfor %}
+
+        <!-- Typing indicator (hidden by default) -->
+        <div class="message message-assistant" id="typing-indicator" style="display: none;">
+            <div class="message-meta">
+                <span class="message-author">AI Assistant</span>
+            </div>
+            <div class="message-content typing">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input card">
+        {% if not ollama_available %}
+            <div class="llm-unavailable">
+                Ollama is offline. Start it with: <code>ollama serve</code>
+            </div>
+        {% endif %}
+
+        <div class="input-row">
+            <textarea
+                id="message-input"
+                placeholder="Ask anything about your database..."
+                rows="2"
+                maxlength="2000"
+                {% if not ollama_available %}disabled{% endif %}
+            ></textarea>
+            <button
+                id="send-btn"
+                onclick="sendMessage()"
+                {% if not ollama_available %}disabled{% endif %}
+            >
+                Send
+            </button>
+        </div>
+        <div class="input-footer">
+            <span id="char-count">0 / 2000</span>
+            <span>Press Ctrl+Enter to send</span>
+        </div>
+    </div>
+
+</div>
+
+<style>
+    .chat-container {
+        max-width: 900px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+    }
+
+    .chat-header h2 {
+        margin: 0 0 8px 0;
+    }
+
+    .status-indicators {
+        display: flex;
+        gap: 8px;
+    }
+
+    .status-badge {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .status-on {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-off {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .suggestions {
+        padding: 12px 20px;
+    }
+
+    .suggestions p {
+        margin: 0 0 8px 0;
+        font-size: 14px;
+        color: #666;
+    }
+
+    .suggestion-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .chip {
+        background: #f0f0f0;
+        border: 1px solid #ddd;
+        border-radius: 16px;
+        padding: 5px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .chip:hover {
+        background: #e0e0e0;
+    }
+
+    .chat-messages {
+        min-height: 400px;
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #999;
+        margin: auto;
+        padding: 40px 0;
+    }
+
+    .message {
+        max-width: 80%;
+        padding: 10px 15px;
+        border-radius: 12px;
+        word-wrap: break-word;
+    }
+
+    .message-user {
+        background: #333;
+        color: white;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message-assistant {
+        background: #f0f0f0;
+        color: #333;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+    }
+
+    .message-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        margin-bottom: 5px;
+        opacity: 0.7;
+    }
+
+    .message-user .message-meta {
+        color: #ccc;
+    }
+
+    .message-content {
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    /* Typing indicator animation */
+    .typing {
+        display: flex;
+        gap: 4px;
+        padding: 4px 0;
+    }
+
+    .typing span {
+        width: 8px;
+        height: 8px;
+        background: #999;
+        border-radius: 50%;
+        animation: bounce 1.2s infinite;
+    }
+
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-8px); }
+    }
+
+    .chat-input {
+        padding: 15px 20px;
+    }
+
+    .input-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+    }
+
+    #message-input {
+        flex: 1;
+        resize: none;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        margin: 0;
+    }
+
+    #message-input:focus {
+        outline: none;
+        border-color: #333;
+    }
+
+    #send-btn {
+        padding: 10px 20px;
+        white-space: nowrap;
+        height: fit-content;
+    }
+
+    #send-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .input-footer {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #999;
+        margin-top: 6px;
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    .btn-danger:hover {
+        background: #c82333;
+    }
+</style>
+
+<script>
+    const csrfToken = "{{ csrf_token }}";
+    const messageInput = document.getElementById("message-input");
+    const sendBtn = document.getElementById("send-btn");
+    const chatMessages = document.getElementById("chat-messages");
+    const typingIndicator = document.getElementById("typing-indicator");
+    const charCount = document.getElementById("char-count");
+    const clearBtn = document.getElementById("clear-btn");
+    const emptyState = document.getElementById("empty-state");
+
+    // Scroll to bottom on load
+    scrollToBottom();
+
+    // Character counter
+    messageInput.addEventListener("input", () => {
+        charCount.textContent = `${messageInput.value.length} / 2000`;
+    });
+
+    // Ctrl+Enter to send
+    messageInput.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.key === "Enter") {
+            sendMessage();
+        }
+    });
+
+    // Clear history
+    clearBtn.addEventListener("click", async () => {
+        if (!confirm("Are you sure you want to clear your chat history?")) return;
+
+        try {
+            const response = await fetch("{% url 'django_llm:chat_clear' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Content-Type": "application/json",
+                }
+            });
+
+            if (response.ok) {
+                // Remove all messages from UI
+                const messages = chatMessages.querySelectorAll(".message:not(#typing-indicator)");
+                messages.forEach(msg => msg.remove());
+
+                // Show empty state
+                if (emptyState) {
+                    emptyState.style.display = "block";
+                } else {
+                    const empty = document.createElement("div");
+                    empty.className = "empty-state";
+                    empty.id = "empty-state";
+                    empty.innerHTML = "<p>No messages yet. Start a conversation below.</p>";
+                    chatMessages.insertBefore(empty, typingIndicator);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to clear chat:", error);
+        }
+    });
+
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
+
+        // Disable input while waiting
+        messageInput.disabled = true;
+        sendBtn.disabled = true;
+
+        // Hide empty state
+        if (emptyState) emptyState.style.display = "none";
+
+        // Add user message to UI immediately
+        appendMessage("user", message, "Just now");
+
+        // Clear input
+        messageInput.value = "";
+        charCount.textContent = "0 / 2000";
+
+        // Show typing indicator
+        typingIndicator.style.display = "flex";
+        scrollToBottom();
+
+        try {
+            const response = await fetch("{% url 'django_llm:chat_message' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": csrfToken,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ message })
+            });
+
+            const data = await response.json();
+
+            // Hide typing indicator
+            typingIndicator.style.display = "none";
+
+            if (response.ok) {
+                appendMessage("assistant", data.response, "Just now");
+            } else {
+                appendMessage("assistant", `Error: ${data.error}`, "Just now");
+            }
+
+        } catch (error) {
+            typingIndicator.style.display = "none";
+            appendMessage("assistant", `Network error: ${error.message}`, "Just now");
+            console.error("Chat error:", error);
+        }
+
+        // Re-enable input
+        messageInput.disabled = false;
+        sendBtn.disabled = false;
+        messageInput.focus();
+        scrollToBottom();
+    }
+
+    function appendMessage(role, content, time) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message message-${role}`;
+        messageDiv.innerHTML = `
+            <div class="message-meta">
+                <span class="message-author">${role === "user" ? "You" : "AI Assistant"}</span>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-content">${escapeHtml(content)}</div>
+        `;
+        chatMessages.insertBefore(messageDiv, typingIndicator);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function setPrompt(text) {
+        messageInput.value = text;
+        charCount.textContent = `${text.length} / 2000`;
+        messageInput.focus();
+    }
+</script>
+
+{% endblock %}

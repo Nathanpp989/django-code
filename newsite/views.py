@@ -4,10 +4,14 @@ from django.contrib import messages
 from django.db import transaction
 from django.db.models import F
 from django.core.cache import cache
-from .models import NewLLM, ConvertLLM, LLMChoice
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from .models import NewLLM, ConvertLLM, LLMChoice, ChatMessage
 from .forms import llm_textbox
 from .mcp_client import MCPOllamaClient, OLLAMA_AVAILABLE, MCP_AVAILABLE
+from django.core.paginator import Paginator
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +27,33 @@ def index_view(request):
     }
     return render(request, "django_llm/index.html", context)
 
+@login_required
+def create_llm_view(request):
+    if request.method == 'POST':
+        llm_text = request.POST.get('llm_text', '').strip()
+        if llm_text:
+            obj = NewLLM.objects.create(llm_text=llm_text)
+            messages.success(request, "LLM entry created.")
+            return redirect("django_llm:detail", obj.pk)
+        messages.error(request, "Text cannot be empty.")
+    return render(request, "django_llm/create_llm.html")
+
+@login_required
+def create_convert_view(request):
+    if request.method == 'POST':
+        form = llm_textbox(request.POST)
+        if form.is_valid():
+            input_str = form.cleaned_data["input_string"]
+            obj = ConvertLLM.objects.create(
+                new_string=input_str,
+                new_number=len(input_str)
+            )
+            messages.success(request, "Created successfully.")
+            return redirect("django_llm:convertstr", obj.pk)
+        messages.error(request, "Text cannot be empty.")
+    else:
+        form = llm_textbox()
+    return render(request, "django_llm/create_convert.html", {"form": form})
 
 @login_required
 def convert_num_view(request, pk):
@@ -86,7 +117,6 @@ def results_view(request, pk):
     response = get_object_or_404(NewLLM, pk=pk)
     amounts = response.choices.all()
 
-    # Generate MCP-powered voting summary
     llm_summary = None
     if amounts.exists():
         cache_key = f"results_summary_{pk}"
@@ -116,7 +146,6 @@ def amount_view(request, pk):
                 selected_amount = response.choices.select_for_update().get(pk=amount_id)
                 selected_amount.amount = F('amount') + 1
                 selected_amount.save()
-            # Invalidate cached summary since votes changed
             cache.delete(f"results_summary_{pk}")
             messages.success(request, "Vote recorded successfully.")
             return redirect("django_llm:results", response.pk)
@@ -140,10 +169,6 @@ def amount_view(request, pk):
 
 @login_required
 def database_overview_view(request):
-    """
-    New view that uses MCP to generate a natural language
-    overview of the entire database.
-    """
     cache_key = "database_overview"
     overview = cache.get(cache_key)
 
@@ -158,3 +183,130 @@ def database_overview_view(request):
         "mcp_available": MCP_AVAILABLE,
     }
     return render(request, "django_llm/overview.html", context)
+
+
+# -------------------------
+# Chat Views
+# -------------------------
+
+@login_required
+def chat_view(request):
+    all_messages = ChatMessage.objects.filter(
+        user=request.user
+    ).order_by("created_at")
+
+    paginator = Paginator(all_messages, 50)
+    page = paginator.get_page(
+        request.GET.get('page', paginator.num_pages)
+    )
+
+    context = {
+        "chat_history": page.object_list,
+        "has_older": page.has_previous(),
+        "older_page": page.previous_page_number() if page.has_previous() else None,
+        "ollama_available": OLLAMA_AVAILABLE,
+        "mcp_available": MCP_AVAILABLE,
+    }
+    return render(request, "django_llm/chat.html", context)
+
+
+def rate_limit_chat(user, max_requests=10, window=60):
+    cache_key = f"chat_rate_{user.pk}"
+    requests = cache.get(cache_key, 0)
+    if requests >= max_requests:
+        return True
+    cache.set(cache_key, requests + 1, timeout=window)
+    return False
+
+@login_required
+@require_POST
+def chat_message_view(request):
+    """
+    AJAX endpoint that receives a user message,
+    sends it to Ollama via MCP, saves both messages,
+    and returns the AI response as JSON.
+    """
+    if rate_limit_chat(request.user):
+        return JsonResponse(
+            {"error": "Too many requests. Please wait a moment."},
+            status=429
+        )
+    try:
+        data = json.loads(request.body)
+        user_message = data.get("message", "").strip()
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({"error": "Invalid request body."}, status=400)
+
+    if not user_message:
+        return JsonResponse({"error": "Message cannot be empty."}, status=400)
+
+    if len(user_message) > 2000:
+        return JsonResponse(
+            {"error": "Message too long. Maximum 2000 characters."},
+            status=400
+        )
+
+    # Save user message to database
+    ChatMessage.objects.create(
+        user=request.user,
+        role="user",
+        content=user_message,
+    )
+
+    # Get AI response via MCP
+    if not OLLAMA_AVAILABLE:
+        ai_response = "Ollama is not available. Please start it with: ollama serve"
+    else:
+        try:
+            # Build conversation history for context
+            history = ChatMessage.objects.filter(
+                user=request.user
+            ).order_by("created_at").values("role", "content")
+
+            ollama_messages = [
+                {"role": msg["role"], "content": msg["content"]}
+                for msg in history
+            ]
+
+            # Add system prompt with MCP tool awareness
+            system_prompt = (
+                "You are a helpful AI assistant with access to a Django database. "
+                "You can use tools to query LLM entries, voting results, "
+                "conversion history, and database statistics. "
+                "Always use the available tools to fetch real data when answering "
+                "questions about the database content."
+            )
+
+            ai_response = mcp_client.chat_with_tools_and_history(
+                messages=ollama_messages,
+                system=system_prompt,
+            )
+        except Exception as e:
+            logger.error(f"Chat error for user {request.user}: {e}")
+            ai_response = f"An error occurred: {str(e)}"
+
+    # Save AI response to database
+    ChatMessage.objects.create(
+        user=request.user,
+        role="assistant",
+        content=ai_response,
+    )
+
+    return JsonResponse({
+        "response": ai_response,
+        "status": "success",
+    })
+
+
+@login_required
+@require_POST
+def chat_clear_view(request):
+    """
+    Clears the chat history for the current user.
+    """
+    deleted_count, _ = ChatMessage.objects.filter(user=request.user).delete()
+    logger.info(f"Cleared {deleted_count} chat messages for user {request.user}")
+    return JsonResponse({
+        "status": "success",
+        "message": f"Cleared {deleted_count} messages."
+    })

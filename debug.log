@@ -26,3 +26,22 @@ WARNING 2026-03-10 16:55:31,656 log Not Found: /static/django_llm/style.css
 WARNING 2026-03-13 18:52:37,902 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-13 18:52:38,607 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-13 18:52:38,616 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-14 16:03:07,416 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-14 16:03:07,423 log Not Found: /accounts/login/
+WARNING 2026-03-14 16:19:11,850 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-14 16:20:05,434 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 18:50:02,784 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 18:50:03,086 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 18:50:03,093 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-16 22:39:34,807 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:41:23,202 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:41:40,690 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:41:47,601 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:42:11,350 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:43:06,869 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:54:35,167 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:54:47,183 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:56:06,293 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:56:59,678 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 22:57:10,080 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-16 23:02:58,644 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'

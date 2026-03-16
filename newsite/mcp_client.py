@@ -1,19 +1,11 @@
 """
 MCP Client for Django LLM views.
 Connects Django views to the MCP server and Ollama.
-
-Usage in views:
-    from django_llm.mcp_client import MCPOllamaClient
-
-    client = MCPOllamaClient()
-    response = client.chat_with_tools("Summarise the voting results for entry 1")
+Supports both single-turn and multi-turn conversations with tool use.
 """
 
 import json
 import logging
-import subprocess
-import os
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +18,6 @@ except ImportError:
     OLLAMA_AVAILABLE = False
 
 # Import tool handler directly for in-process use
-# This avoids needing a separate MCP server process
 try:
     from django_llm.mcp_server import MCPToolHandler, TOOLS
     MCP_AVAILABLE = True
@@ -40,7 +31,7 @@ except Exception as e:
 class MCPOllamaClient:
     """
     Combines Ollama LLM with MCP tools.
-    Allows Ollama to call Django database tools when answering questions.
+    Supports single-turn prompts and full multi-turn conversations.
     """
 
     def __init__(self, model: str = "llama3"):
@@ -66,30 +57,19 @@ class MCPOllamaClient:
         """Execute an MCP tool and return the result as a string."""
         if not self.tool_handler:
             return json.dumps({"error": "MCP tools unavailable"})
-
         result = self.tool_handler.execute(tool_name, parameters)
         return json.dumps(result.get("result", result.get("error", "No result")))
 
-    def chat_with_tools(self, prompt: str, max_iterations: int = 5) -> str:
+    def _run_tool_loop(
+        self,
+        messages: list,
+        max_iterations: int = 5
+    ) -> str:
         """
-        Send a prompt to Ollama with MCP tools available.
-        Ollama can call tools to fetch data before responding.
-
-        Args:
-            prompt: The user's question or request
-            max_iterations: Max tool call loops to prevent infinite loops
-
-        Returns:
-            The final text response from Ollama
+        Core tool-calling loop.
+        Sends messages to Ollama, handles tool calls,
+        and returns the final text response.
         """
-        if not OLLAMA_AVAILABLE:
-            return "Ollama is not available. Please install and start it."
-
-        if not MCP_AVAILABLE:
-            # Fall back to plain Ollama without tools
-            return self._plain_chat(prompt)
-
-        messages = [{"role": "user", "content": prompt}]
         tools = self._format_tools_for_ollama()
 
         for iteration in range(max_iterations):
@@ -97,44 +77,82 @@ class MCPOllamaClient:
                 response = ollama.chat(
                     model=self.model,
                     messages=messages,
-                    tools=tools,
+                    tools=tools if MCP_AVAILABLE else None,
                     options={"num_predict": 500}
                 )
 
                 message = response["message"]
 
-                # If no tool calls, return the final response
+                # No tool calls means we have a final response
                 if not message.get("tool_calls"):
                     return message.get("content", "No response generated.")
 
-                # Process tool calls
+                # Append assistant message with tool calls
                 messages.append(message)
 
+                # Process each tool call
                 for tool_call in message["tool_calls"]:
                     tool_name = tool_call["function"]["name"]
                     parameters = tool_call["function"]["arguments"]
 
                     logger.debug(f"Ollama calling tool: {tool_name} with {parameters}")
-
-                    # Execute the tool
                     tool_result = self._execute_tool(tool_name, parameters)
-
                     logger.debug(f"Tool result: {tool_result[:200]}")
 
-                    # Add tool result to messages
                     messages.append({
                         "role": "tool",
                         "content": tool_result,
                     })
 
             except Exception as e:
-                logger.error(f"MCPOllamaClient error on iteration {iteration}: {e}")
+                logger.error(f"Tool loop error on iteration {iteration}: {e}")
                 return f"Error communicating with LLM: {str(e)}"
 
         return "Maximum tool call iterations reached. Please try a more specific question."
 
+    def chat_with_tools(self, prompt: str, max_iterations: int = 5) -> str:
+        """
+        Single-turn chat with MCP tools available.
+        Used by convert and results views.
+        """
+        if not OLLAMA_AVAILABLE:
+            return "Ollama is not available. Please install and start it."
+
+        messages = [{"role": "user", "content": prompt}]
+        return self._run_tool_loop(messages, max_iterations)
+
+    def chat_with_tools_and_history(
+        self,
+        messages: list,
+        system: str = None,
+        max_iterations: int = 5
+    ) -> str:
+        """
+        Multi-turn chat with full conversation history and MCP tools.
+        Used by the chat interface view.
+
+        Args:
+            messages: Full conversation history as list of
+                      {"role": "user"/"assistant", "content": "..."} dicts
+            system: Optional system prompt
+            max_iterations: Max tool call loops
+
+        Returns:
+            AI response text
+        """
+        if not OLLAMA_AVAILABLE:
+            return "Ollama is not available. Please install and start it."
+
+        # Build messages with optional system prompt
+        full_messages = []
+        if system:
+            full_messages.append({"role": "system", "content": system})
+        full_messages.extend(messages)
+
+        return self._run_tool_loop(full_messages, max_iterations)
+
     def _plain_chat(self, prompt: str) -> str:
-        """Fall back to plain Ollama chat without tools."""
+        """Fallback plain Ollama chat without tools."""
         try:
             response = ollama.chat(
                 model=self.model,
@@ -147,7 +165,7 @@ class MCPOllamaClient:
             return f"LLM error: {str(e)}"
 
     def summarise_convert(self, input_str: str) -> str:
-        """Summarise a converted string using Ollama with database context."""
+        """Summarise a converted string with database context."""
         prompt = (
             f"Please analyse the following text and provide a brief summary "
             f"of its content, tone, and key points in 2-3 sentences. "

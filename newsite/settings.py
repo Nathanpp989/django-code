@@ -19,17 +19,15 @@ if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = secrets.token_urlsafe(50)
     else:
-        raise ValueError
-    ("DJANGO_SECRET_KEY environment variable must be set in production")
+        raise ValueError("DJANGO_SECRET_KEY environment variable must be set in production")
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS",
-                          "localhost,127.0.0.1").split(",")
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
 
-# CSRF trusted origins for secure deployments
+# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = []
 if not DEBUG and ALLOWED_HOSTS:
     for host in ALLOWED_HOSTS:
@@ -44,10 +42,32 @@ if not DEBUG and ALLOWED_HOSTS:
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# Security settings
+# -------------------------
+# Security Settings
+# -------------------------
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Session settings
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = False
+
+# -------------------------
+# Client Certificate Settings
+# Paths that bypass client cert verification
+# -------------------------
+CLIENT_CERT_EXEMPT_PATHS = [
+    "/accounts/login/",
+    "/accounts/logout/",
+    "/static/",
+    "/media/",
+    "/favicon.ico",
+    "/robots.txt",
+    "/admin/login/",
+]
 
 # Application definition
 INSTALLED_APPS = [
@@ -64,7 +84,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # "whitenoise.middleware.WhiteNoiseMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django_llm.middleware.ClientCertificateMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -93,8 +114,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "newsite.wsgi.application"
 
+# -------------------------
 # Database
-# Uses DATABASE_URL environment variable if set, otherwise falls back to SQLite
+# -------------------------
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
@@ -102,7 +124,9 @@ DATABASES = {
     )
 }
 
-# Password validation
+# -------------------------
+# Password Validation
+# -------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -110,23 +134,52 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
+# -------------------------
 # Internationalization
+# -------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# Static files
+# -------------------------
+# Static Files
+# -------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 if not DEBUG:
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# -------------------------
+# Auth Redirects
+# -------------------------
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/"
+LOGIN_URL = "/accounts/login/"
+
+# -------------------------
+# Caching
+# -------------------------
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "django-llm-cache",
+    }
+}
+
+# -------------------------
+# Ollama Settings
+# -------------------------
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "200"))
+OLLAMA_CACHE_TIMEOUT = int(os.getenv("OLLAMA_CACHE_TIMEOUT", "300"))
+
+# -------------------------
 # Logging
+# -------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

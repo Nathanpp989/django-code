@@ -1,26 +1,22 @@
 #!/bin/bash
 echo "Starting Django LLM stack..."
 
-# Start Ollama in background
-echo "Starting Ollama..."
+# Start Ollama
 ollama serve &
-OLLAMA_PID=$!
-echo "Ollama started (PID: $OLLAMA_PID)"
-
-# Wait for Ollama to be ready
+echo "Ollama started"
 sleep 2
 
 # Start NGINX
-echo "Starting NGINX..."
 sudo service nginx start
+echo "NGINX started"
 
 # Run migrations
-echo "Running migrations..."
 python manage.py migrate
+echo "Migrations complete"
 
 # Collect static files
-echo "Collecting static files..."
 python manage.py collectstatic --noinput
+echo "Static files collected"
 
 # Start Gunicorn
 echo "Starting Gunicorn..."
@@ -29,5 +25,4 @@ python -m gunicorn --workers 3 \
     --access-logfile /var/log/gunicorn_access.log \
     --error-logfile /var/log/gunicorn_error.log \
     newsite.wsgi:application
-
-echo "Stack is running at http://localhost"
+    
