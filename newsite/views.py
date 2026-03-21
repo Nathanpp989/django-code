@@ -4,12 +4,12 @@ from django.contrib import messages
 from django.db import transaction
 from django.db.models import F
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from .models import NewLLM, ConvertLLM, LLMChoice, ChatMessage
-from .forms import llm_textbox
+from .forms import llm_textbox, NewLLMForm
 from .mcp_client import MCPOllamaClient, OLLAMA_AVAILABLE, MCP_AVAILABLE
-from django.core.paginator import Paginator
 import logging
 import json
 
@@ -19,41 +19,39 @@ logger = logging.getLogger(__name__)
 mcp_client = MCPOllamaClient()
 
 
+# -------------------------
+# Rate Limiting Helper
+# -------------------------
+
+def rate_limit_chat(user, max_requests=10, window=60):
+    """
+    Allow max_requests per window seconds per user.
+    Returns True if rate limited, False if allowed.
+    """
+    cache_key = f"chat_rate_{user.pk}"
+    requests = cache.get(cache_key, 0)
+    if requests >= max_requests:
+        return True
+    cache.set(cache_key, requests + 1, timeout=window)
+    return False
+
+
+# -------------------------
+# Core Views
+# -------------------------
+
 def index_view(request):
+    recent_llm = NewLLM.objects.order_by("-llm_date_used")[:5]
+    recent_converts = ConvertLLM.objects.order_by("-created_at")[:5]
     context = {
         "message": "Django LLM with MCP server integration.",
         "ollama_available": OLLAMA_AVAILABLE,
         "mcp_available": MCP_AVAILABLE,
+        "recent_llm": recent_llm,
+        "recent_converts": recent_converts,
     }
     return render(request, "django_llm/index.html", context)
 
-@login_required
-def create_llm_view(request):
-    if request.method == 'POST':
-        llm_text = request.POST.get('llm_text', '').strip()
-        if llm_text:
-            obj = NewLLM.objects.create(llm_text=llm_text)
-            messages.success(request, "LLM entry created.")
-            return redirect("django_llm:detail", obj.pk)
-        messages.error(request, "Text cannot be empty.")
-    return render(request, "django_llm/create_llm.html")
-
-@login_required
-def create_convert_view(request):
-    if request.method == 'POST':
-        form = llm_textbox(request.POST)
-        if form.is_valid():
-            input_str = form.cleaned_data["input_string"]
-            obj = ConvertLLM.objects.create(
-                new_string=input_str,
-                new_number=len(input_str)
-            )
-            messages.success(request, "Created successfully.")
-            return redirect("django_llm:convertstr", obj.pk)
-        messages.error(request, "Text cannot be empty.")
-    else:
-        form = llm_textbox()
-    return render(request, "django_llm/create_convert.html", {"form": form})
 
 @login_required
 def convert_num_view(request, pk):
@@ -71,6 +69,8 @@ def convert_num_view(request, pk):
             response.new_number = result_num
             try:
                 response.save()
+                # Invalidate cached summary
+                cache.delete(f"convert_summary_{pk}_{hash(input_str)}")
                 messages.success(request, "Saved successfully.")
             except Exception as e:
                 logger.error(f"Failed to save ConvertLLM pk={pk}: {e}")
@@ -186,11 +186,64 @@ def database_overview_view(request):
 
 
 # -------------------------
+# Create Views
+# -------------------------
+
+@login_required
+def create_llm_view(request):
+    """Create a new NewLLM entry with choices."""
+    if request.method == 'POST':
+        form = NewLLMForm(request.POST)
+        if form.is_valid():
+            llm_text = form.cleaned_data["llm_text"]
+            choices = form.cleaned_data.get("choices", "")
+
+            obj = NewLLM.objects.create(llm_text=llm_text)
+
+            # Create choices if provided
+            if choices:
+                for choice_text in choices.splitlines():
+                    choice_text = choice_text.strip()
+                    if choice_text:
+                        LLMChoice.objects.create(
+                            new_llm=obj,
+                            choice_text=choice_text
+                        )
+
+            messages.success(request, f"LLM entry '{llm_text}' created.")
+            return redirect("django_llm:detail", obj.pk)
+    else:
+        form = NewLLMForm()
+
+    return render(request, "django_llm/create_llm.html", {"form": form})
+
+
+@login_required
+def create_convert_view(request):
+    """Create a new ConvertLLM entry."""
+    if request.method == 'POST':
+        form = llm_textbox(request.POST)
+        if form.is_valid():
+            input_str = form.cleaned_data["input_string"]
+            obj = ConvertLLM.objects.create(
+                new_string=input_str,
+                new_number=len(input_str)
+            )
+            messages.success(request, "Conversion entry created.")
+            return redirect("django_llm:convertstr", obj.pk)
+    else:
+        form = llm_textbox()
+
+    return render(request, "django_llm/create_convert.html", {"form": form})
+
+
+# -------------------------
 # Chat Views
 # -------------------------
 
 @login_required
 def chat_view(request):
+    """Main chat interface with pagination."""
     all_messages = ChatMessage.objects.filter(
         user=request.user
     ).order_by("created_at")
@@ -210,27 +263,20 @@ def chat_view(request):
     return render(request, "django_llm/chat.html", context)
 
 
-def rate_limit_chat(user, max_requests=10, window=60):
-    cache_key = f"chat_rate_{user.pk}"
-    requests = cache.get(cache_key, 0)
-    if requests >= max_requests:
-        return True
-    cache.set(cache_key, requests + 1, timeout=window)
-    return False
-
 @login_required
 @require_POST
 def chat_message_view(request):
     """
-    AJAX endpoint that receives a user message,
-    sends it to Ollama via MCP, saves both messages,
-    and returns the AI response as JSON.
+    AJAX endpoint for chat messages.
+    Applies rate limiting, saves messages, calls Ollama via MCP.
     """
+    # Rate limit check
     if rate_limit_chat(request.user):
         return JsonResponse(
             {"error": "Too many requests. Please wait a moment."},
             status=429
         )
+
     try:
         data = json.loads(request.body)
         user_message = data.get("message", "").strip()
@@ -246,7 +292,7 @@ def chat_message_view(request):
             status=400
         )
 
-    # Save user message to database
+    # Save user message
     ChatMessage.objects.create(
         user=request.user,
         role="user",
@@ -258,7 +304,6 @@ def chat_message_view(request):
         ai_response = "Ollama is not available. Please start it with: ollama serve"
     else:
         try:
-            # Build conversation history for context
             history = ChatMessage.objects.filter(
                 user=request.user
             ).order_by("created_at").values("role", "content")
@@ -268,7 +313,6 @@ def chat_message_view(request):
                 for msg in history
             ]
 
-            # Add system prompt with MCP tool awareness
             system_prompt = (
                 "You are a helpful AI assistant with access to a Django database. "
                 "You can use tools to query LLM entries, voting results, "
@@ -285,7 +329,7 @@ def chat_message_view(request):
             logger.error(f"Chat error for user {request.user}: {e}")
             ai_response = f"An error occurred: {str(e)}"
 
-    # Save AI response to database
+    # Save AI response
     ChatMessage.objects.create(
         user=request.user,
         role="assistant",
@@ -301,9 +345,7 @@ def chat_message_view(request):
 @login_required
 @require_POST
 def chat_clear_view(request):
-    """
-    Clears the chat history for the current user.
-    """
+    """Clear chat history for the current user."""
     deleted_count, _ = ChatMessage.objects.filter(user=request.user).delete()
     logger.info(f"Cleared {deleted_count} chat messages for user {request.user}")
     return JsonResponse({

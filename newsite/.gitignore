@@ -1,0 +1,34 @@
+# Django
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+staticfiles/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Certificates - never commit these
+/etc/nginx/ssl/
+*.key
+*.crt
+*.p12
+*.csr
+*.pem
+
+# Python
+venv/
+*.egg-info/
+
+# Logs
+*.log
+debug.log
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

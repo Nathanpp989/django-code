@@ -1,20 +1,74 @@
-{% load static %}
-{% csrf_token %}
-<!DOCTYPE html>
+{% extends "base.html" %}
 
-<html>
-<head>
-    <title>Simple LLama3.2 Django server</title>
-    <link rel="stylesheet" href="{% static 'django_llm/style.css' %}">
-</head>
-<body>
-    <div id = "django_server">
-    <h1>Server source:</h1>
+{% block title %}Django LLM - Home{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome to Django LLM</h2>
+    <p>{{ message }}</p>
     <br>
-    <a href="http://127.0.0.1:8000/mcp">Link to the server</a>
-    <p style = "font-family: Arial;">The point of this server is to get the server to work with django.</p>
-    <p>This will be added onto in order to make a working llm server that uses MCP.</p>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{% url 'django_llm:chat' %}" class="btn btn-success">Open Chat</a>
+        <a href="{% url 'django_llm:overview' %}" class="btn">Database Overview</a>
+        <a href="{% url 'django_llm:create_llm' %}" class="btn">New LLM Entry</a>
+        <a href="{% url 'django_llm:create_convert' %}" class="btn">New Conversion</a>
     </div>
-</body>
-</html>
-{% load static %}
+</div>
+
+{% if recent_llm %}
+<div class="card">
+    <h3>Recent LLM Entries</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Text</th>
+                <th>Date Used</th>
+                <th>Choices</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in recent_llm %}
+            <tr>
+                <td>{{ entry.llm_text }}</td>
+                <td>{{ entry.llm_date_used|date:"Y-m-d H:i" }}</td>
+                <td>{{ entry.choices.count }}</td>
+                <td>
+                    <a href="{% url 'django_llm:detail' entry.pk %}">Vote</a> |
+                    <a href="{% url 'django_llm:results' entry.pk %}">Results</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if recent_converts %}
+<div class="card">
+    <h3>Recent Conversions</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>String</th>
+                <th>Character Count</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in recent_converts %}
+            <tr>
+                <td>{{ entry.new_string|truncatechars:50 }}</td>
+                <td>{{ entry.new_number }}</td>
+                <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <a href="{% url 'django_llm:convertstr' entry.pk %}">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

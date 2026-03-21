@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+
 echo "Starting Django LLM stack..."
 
 # Start Ollama
@@ -19,10 +21,11 @@ python manage.py collectstatic --noinput
 echo "Static files collected"
 
 # Start Gunicorn
-echo "Starting Gunicorn..."
-python -m gunicorn --workers 3 \
+echo "Starting Gunicorn on port 8000..."
+python -m gunicorn \
+    --workers 3 \
+    --timeout 120 \
     --log-level info \
     --access-logfile /var/log/gunicorn_access.log \
     --error-logfile /var/log/gunicorn_error.log \
     newsite.wsgi:application
-    

@@ -4,30 +4,27 @@ import secrets
 from dotenv import load_dotenv
 import dj_database_url
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env file
 load_dotenv(str(BASE_DIR / ".env"))
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "True").lower() in ("1", "true", "yes")
 
-# SECRET_KEY handling: require in production, generate for development
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = secrets.token_urlsafe(50)
     else:
-        raise ValueError("DJANGO_SECRET_KEY environment variable must be set in production")
+        raise ValueError("DJANGO_SECRET_KEY must be set in production")
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    for host in os.getenv(
+        "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1"
+    ).split(",")
     if host.strip()
 ]
 
-# CSRF trusted origins
 CSRF_TRUSTED_ORIGINS = []
 if not DEBUG and ALLOWED_HOSTS:
     for host in ALLOWED_HOSTS:
@@ -38,26 +35,22 @@ if not DEBUG and ALLOWED_HOSTS:
         else:
             CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
 
-# Media files
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # -------------------------
-# Security Settings
+# Security
 # -------------------------
 SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# Session settings
-SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_AGE = 1209600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = False
 
 # -------------------------
 # Client Certificate Settings
-# Paths that bypass client cert verification
 # -------------------------
 CLIENT_CERT_EXEMPT_PATHS = [
     "/accounts/login/",
@@ -69,7 +62,9 @@ CLIENT_CERT_EXEMPT_PATHS = [
     "/admin/login/",
 ]
 
-# Application definition
+# -------------------------
+# Applications
+# -------------------------
 INSTALLED_APPS = [
     "django_llm.apps.DjangoLlmConfig",
     "newsite.apps.NewsiteConfig",
@@ -135,7 +130,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # -------------------------
-# Internationalization
+# Internationalisation
 # -------------------------
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
