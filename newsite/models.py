@@ -114,10 +114,6 @@ class ReverseLLM(models.Model):
 
 
 class ChatMessage(models.Model):
-    """
-    Stores chat history for each user.
-    Each message has a role (user or assistant) and content.
-    """
     ROLE_CHOICES = [
         ("user", "User"),
         ("assistant", "Assistant"),
@@ -147,3 +143,33 @@ class ChatMessage(models.Model):
         ordering = ["created_at"]
         verbose_name = "Chat Message"
         verbose_name_plural = "Chat Messages"
+
+
+class LLMSummary(models.Model):
+    """
+    Persists Ollama summaries to avoid regenerating them on every page load.
+    Summaries are keyed by a hash of the prompt so identical prompts
+    return cached results instantly without calling Ollama again.
+    """
+    content_type = models.CharField(max_length=50)
+    object_id = models.PositiveIntegerField()
+    prompt_hash = models.CharField(max_length=64, unique=True)
+    summary = models.TextField()
+    model_used = models.CharField(max_length=100, default="llama3")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Summary for {self.content_type} #{self.object_id}"
+
+    def __repr__(self):
+        return f"<LLMSummary pk={self.pk} type={self.content_type!r}>"
+
+    class Meta:
+        verbose_name = "LLM Summary"
+        verbose_name_plural = "LLM Summaries"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["prompt_hash"]),
+        ]

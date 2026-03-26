@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}403 Forbidden{% endblock %}
+{% block content %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h2 style="color: #dc3545;">403 - Access Forbidden</h2>
+    <p>You don't have permission to access this page.</p>
+    {% if request.META.HTTP_X_SSL_CLIENT_VERIFY == "FAILED" %}
+        <div class="llm-unavailable" style="margin: 20px auto; max-width: 400px;">
+            Your client certificate could not be verified.
+            Please ensure you have imported the correct certificate.
+        </div>
+    {% endif %}
+    <br>
+    <a href="{% url 'django_llm:index' %}" class="btn">Go Home</a>
+    <a href="{% url 'login' %}" class="btn" style="margin-left: 10px; background: #888;">Login</a>
+</div>
+{% endblock %}

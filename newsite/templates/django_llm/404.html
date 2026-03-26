@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}404 Not Found{% endblock %}
+{% block content %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h2 style="color: #856404;">404 - Page Not Found</h2>
+    <p>The page you're looking for doesn't exist.</p>
+    <br>
+    <a href="{% url 'django_llm:index' %}" class="btn">Go Home</a>
+    <a href="{% url 'django_llm:chat' %}" class="btn" style="margin-left: 10px; background: #28a745;">Open Chat</a>
+</div>
+{% endblock %}

@@ -55,3 +55,22 @@ WARNING 2026-03-21 16:31:07,733 mcp_client MCP tools unavailable: No module name
 WARNING 2026-03-21 16:31:21,723 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-21 16:31:32,159 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-21 16:54:08,442 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-21 16:56:50,422 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-21 16:56:50,423 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-21 16:56:50,425 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 18:46:40,090 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 18:46:40,093 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 18:46:40,093 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 18:59:01,003 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-23 18:59:01,296 log Not Found: /static/django_llm/style.css
+WARNING 2026-03-23 18:59:01,471 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-23 18:59:01,493 log Not Found: /favicon.ico
+WARNING 2026-03-23 19:28:49,675 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 19:28:49,679 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-23 19:28:49,680 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-26 23:07:05,869 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-26 23:07:05,874 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-26 23:07:05,879 apps Ollama is not running. LLM features will be unavailable.
+WARNING 2026-03-26 23:07:19,197 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-26 23:07:20,113 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
+WARNING 2026-03-26 23:07:20,137 log Not Found: /static/django_llm/style.css

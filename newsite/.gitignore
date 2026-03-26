@@ -1,34 +1,85 @@
+# -------------------------
 # Django
+# -------------------------
 *.pyc
 __pycache__/
 db.sqlite3
 media/
 staticfiles/
+local_settings.py
 
+# -------------------------
 # Environment
+# -------------------------
 .env
 .env.*
 !.env.example
 
-# Certificates - never commit these
-/etc/nginx/ssl/
+# -------------------------
+# Certificates - NEVER commit
+# -------------------------
 *.key
 *.crt
 *.p12
 *.csr
 *.pem
+*.srl
+/etc/nginx/ssl/
 
+# -------------------------
 # Python
+# -------------------------
 venv/
+env/
+.venv/
 *.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
 
+# -------------------------
+# Testing
+# -------------------------
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.cover
+
+# -------------------------
 # Logs
+# -------------------------
 *.log
 debug.log
+logs/
 
+# -------------------------
 # VS Code
+# -------------------------
 .vscode/
+*.code-workspace
 
+# -------------------------
 # OS
+# -------------------------
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+
+# -------------------------
+# Editors
+# -------------------------
+*.swp
+*.swo
+*~
+.idea/
+
+# -------------------------
+# Node (if any frontend tooling added)
+# -------------------------
+node_modules/
+npm-debug.log

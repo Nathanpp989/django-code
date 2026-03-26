@@ -1,34 +1,53 @@
+# -------------------------
 # Core
+# -------------------------
 django>=4.1.6
 
+# -------------------------
 # Database
+# -------------------------
 psycopg2-binary
 dj-database-url
 
-# Environment variables
+# -------------------------
+# Environment
+# -------------------------
 python-dotenv
 
+# -------------------------
 # Server
+# -------------------------
 gunicorn
 whitenoise
 
+# -------------------------
 # LLM and MCP
+# -------------------------
 ollama
 mcp
 
+# -------------------------
 # Caching
+# -------------------------
 django-redis
 redis
 
+# -------------------------
 # Development tools
+# -------------------------
 django-extensions
 django-debug-toolbar
 
+# -------------------------
 # Testing
+# -------------------------
 pytest
 pytest-django
+pytest-cov
 coverage
 
+# -------------------------
 # Code quality
+# -------------------------
 black
 flake8

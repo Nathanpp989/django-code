@@ -1,14 +1,12 @@
 from django.urls import path
 from . import views
-from django.contrib import admin
-from django.urls import path, include
-from django.contrib.auth import views as auth_views
 
 app_name = "django_llm"
 
 urlpatterns = [
-    # Home
+    # Home and utilities
     path("", views.index_view, name="index"),
+    path("health/", views.health_check_view, name="health"),
 
     # Convert string views
     path("convert/create/", views.create_convert_view, name="create_convert"),
@@ -20,6 +18,9 @@ urlpatterns = [
     path("amount/<int:pk>/", views.amount_view, name="amount"),
     path("results/<int:pk>/", views.results_view, name="results"),
 
+    # Reverse LLM view
+    path("reverse/<int:pk>/", views.reverse_llm_view, name="reverse"),
+
     # MCP database overview
     path("overview/", views.database_overview_view, name="overview"),
 
@@ -27,10 +28,5 @@ urlpatterns = [
     path("chat/", views.chat_view, name="chat"),
     path("chat/message/", views.chat_message_view, name="chat_message"),
     path("chat/clear/", views.chat_clear_view, name="chat_clear"),
-
-    # admin views
-    path("admin/", admin.site.urls),
-    path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
-    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("", include("django_llm.urls")),
+    path("chat/export/", views.chat_export_view, name="chat_export"),
 ]

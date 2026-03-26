@@ -25,6 +25,18 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Validate required production environment variables
+REQUIRED_ENV_VARS = [] if DEBUG else [
+    "DJANGO_SECRET_KEY",
+    "DJANGO_ALLOWED_HOSTS",
+    "DATABASE_URL",
+]
+missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+if missing:
+    raise ValueError(
+        f"Missing required environment variables: {', '.join(missing)}"
+    )
+
 CSRF_TRUSTED_ORIGINS = []
 if not DEBUG and ALLOWED_HOSTS:
     for host in ALLOWED_HOSTS:
@@ -45,6 +57,9 @@ SECURE_SSL_REDIRECT = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = 0 if DEBUG else 63072000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 SESSION_COOKIE_AGE = 1209600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = False
@@ -60,6 +75,7 @@ CLIENT_CERT_EXEMPT_PATHS = [
     "/favicon.ico",
     "/robots.txt",
     "/admin/login/",
+    "/health/",
 ]
 
 # -------------------------

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}500 Server Error{% endblock %}
+{% block content %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h2 style="color: #dc3545;">500 - Server Error</h2>
+    <p>Something went wrong on our end. Please try again later.</p>
+    <p style="color: #888; font-size: 13px; margin-top: 10px;">
+        If this keeps happening, check the server logs at <code>debug.log</code>
+    </p>
+    <br>
+    <a href="{% url 'django_llm:index' %}" class="btn">Go Home</a>
+</div>
+{% endblock %}

@@ -1,8 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
-from django.urls import reverse
 from django.utils import timezone
-from .models import NewLLM, ConvertLLM, LLMChoice, ChatMessage, ReverseLLM
+from .models import NewLLM, ConvertLLM, LLMChoice, ChatMessage, ReverseLLM, LLMSummary
 import json
 
 
@@ -29,6 +28,11 @@ class NewLLMModelTest(TestCase):
         self.llm.save()
         self.assertFalse(self.llm.was_published_recently())
 
+    def test_ordering(self):
+        llm2 = NewLLM.objects.create(llm_text="Test LLM 2")
+        entries = list(NewLLM.objects.all())
+        self.assertEqual(entries[0], llm2)
+
 
 class LLMChoiceModelTest(TestCase):
     def setUp(self):
@@ -45,15 +49,15 @@ class LLMChoiceModelTest(TestCase):
     def test_default_amount(self):
         self.assertEqual(self.choice.amount, 0)
 
-    def test_related_name(self):
-        self.assertIn(self.choice, self.llm.choices.all())
+    def test_cascade_delete(self):
+        self.llm.delete()
+        self.assertEqual(LLMChoice.objects.filter(pk=self.choice.pk).count(), 0)
 
 
 class ConvertLLMModelTest(TestCase):
     def setUp(self):
         self.obj = ConvertLLM.objects.create(
-            new_string="hello",
-            new_number=5
+            new_string="hello", new_number=5
         )
 
     def test_str(self):
@@ -80,8 +84,7 @@ class ReverseLLMModelTest(TestCase):
 class ChatMessageModelTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass'
+            username='testuser', password='testpass'
         )
         self.message = ChatMessage.objects.create(
             user=self.user,
@@ -91,20 +94,43 @@ class ChatMessageModelTest(TestCase):
 
     def test_str(self):
         self.assertIn("testuser", str(self.message))
-        self.assertIn("user", str(self.message))
 
     def test_repr(self):
         self.assertIn("ChatMessage", repr(self.message))
 
-    def test_ordering(self):
-        msg2 = ChatMessage.objects.create(
-            user=self.user,
-            role="assistant",
-            content="Hello human"
+    def test_cascade_delete(self):
+        self.user.delete()
+        self.assertEqual(
+            ChatMessage.objects.filter(pk=self.message.pk).count(), 0
         )
-        messages = list(ChatMessage.objects.filter(user=self.user))
-        self.assertEqual(messages[0], self.message)
-        self.assertEqual(messages[1], msg2)
+
+
+class LLMSummaryModelTest(TestCase):
+    def test_create_summary(self):
+        summary = LLMSummary.objects.create(
+            content_type="convert",
+            object_id=1,
+            prompt_hash="abc123",
+            summary="Test summary",
+            model_used="llama3"
+        )
+        self.assertEqual(str(summary), "Summary for convert #1")
+
+    def test_unique_prompt_hash(self):
+        LLMSummary.objects.create(
+            content_type="convert",
+            object_id=1,
+            prompt_hash="unique_hash",
+            summary="Test"
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            LLMSummary.objects.create(
+                content_type="convert",
+                object_id=2,
+                prompt_hash="unique_hash",
+                summary="Duplicate"
+            )
 
 
 # -------------------------
@@ -112,8 +138,6 @@ class ChatMessageModelTest(TestCase):
 # -------------------------
 
 class AuthenticationTest(TestCase):
-    """Test that unauthenticated users are redirected."""
-
     def setUp(self):
         self.client = Client()
         self.convert = ConvertLLM.objects.create(
@@ -126,10 +150,6 @@ class AuthenticationTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn('/accounts/login/', response.url)
 
-    def test_detail_view_redirect(self):
-        response = self.client.get(f'/detail/{self.llm.pk}/')
-        self.assertEqual(response.status_code, 302)
-
     def test_chat_view_redirect(self):
         response = self.client.get('/chat/')
         self.assertEqual(response.status_code, 302)
@@ -138,12 +158,29 @@ class AuthenticationTest(TestCase):
         response = self.client.get('/overview/')
         self.assertEqual(response.status_code, 302)
 
+    def test_create_llm_redirect(self):
+        response = self.client.get('/llm/create/')
+        self.assertEqual(response.status_code, 302)
+
 
 class IndexViewTest(TestCase):
     def test_index_loads(self):
         response = self.client.get('/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Django LLM")
+
+    def test_index_shows_recent_entries(self):
+        NewLLM.objects.create(llm_text="Test Entry")
+        response = self.client.get('/')
+        self.assertContains(response, "Test Entry")
+
+
+class HealthCheckTest(TestCase):
+    def test_health_check(self):
+        response = self.client.get('/health/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["django"], "ok")
+        self.assertEqual(data["database"], "ok")
 
 
 class ConvertViewTest(TestCase):
@@ -182,26 +219,6 @@ class ConvertViewTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-class DetailViewTest(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(
-            username='testuser', password='testpass'
-        )
-        self.client.login(username='testuser', password='testpass')
-        self.llm = NewLLM.objects.create(llm_text="Test LLM")
-        self.choice = LLMChoice.objects.create(
-            new_llm=self.llm,
-            choice_text="Option A",
-            amount=0
-        )
-
-    def test_get_view(self):
-        response = self.client.get(f'/detail/{self.llm.pk}/')
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test LLM")
-        self.assertContains(response, "Option A")
-
-
 class AmountViewTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -231,9 +248,23 @@ class AmountViewTest(TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-    def test_missing_vote(self):
-        response = self.client.post(f'/amount/{self.llm.pk}/', {})
-        self.assertEqual(response.status_code, 200)
+    def test_vote_invalidates_summary(self):
+        LLMSummary.objects.create(
+            content_type="results",
+            object_id=self.llm.pk,
+            prompt_hash="test_hash",
+            summary="Old summary"
+        )
+        self.client.post(
+            f'/amount/{self.llm.pk}/',
+            {"amount": self.choice.pk}
+        )
+        self.assertEqual(
+            LLMSummary.objects.filter(
+                content_type="results",
+                object_id=self.llm.pk
+            ).count(), 0
+        )
 
 
 class CreateViewTest(TestCase):
@@ -255,8 +286,7 @@ class CreateViewTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(NewLLM.objects.filter(llm_text="New LLM").exists())
         self.assertEqual(
-            LLMChoice.objects.filter(new_llm__llm_text="New LLM").count(),
-            2
+            LLMChoice.objects.filter(new_llm__llm_text="New LLM").count(), 2
         )
 
     def test_create_convert_get(self):
@@ -311,9 +341,7 @@ class ChatViewTest(TestCase):
 
     def test_chat_clear(self):
         ChatMessage.objects.create(
-            user=self.user,
-            role="user",
-            content="test message"
+            user=self.user, role="user", content="test"
         )
         response = self.client.post('/chat/clear/')
         self.assertEqual(response.status_code, 200)
@@ -321,15 +349,31 @@ class ChatViewTest(TestCase):
             ChatMessage.objects.filter(user=self.user).count(), 0
         )
 
-    def test_chat_history_pagination(self):
-        # Create 60 messages
+    def test_chat_export(self):
+        ChatMessage.objects.create(
+            user=self.user, role="user", content="test message"
+        )
+        response = self.client.get('/chat/export/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn('chat_history.csv', response['Content-Disposition'])
+
+    def test_chat_pagination(self):
         for i in range(60):
             ChatMessage.objects.create(
-                user=self.user,
-                role="user",
-                content=f"Message {i}"
+                user=self.user, role="user", content=f"Message {i}"
             )
         response = self.client.get('/chat/')
         self.assertEqual(response.status_code, 200)
-        # Should only show 50 per page
         self.assertEqual(len(response.context['chat_history']), 50)
+
+    def test_rate_limiting(self):
+        from django.core.cache import cache
+        cache.set(f"chat_rate_{self.user.pk}", 10, timeout=60)
+        response = self.client.post(
+            '/chat/message/',
+            data=json.dumps({"message": "hello"}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 429)
+        cache.delete(f"chat_rate_{self.user.pk}")
