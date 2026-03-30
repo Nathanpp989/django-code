@@ -19,23 +19,23 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv(
-        "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1"
-    ).split(",")
+    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
 
 # Validate required production environment variables
-REQUIRED_ENV_VARS = [] if DEBUG else [
-    "DJANGO_SECRET_KEY",
-    "DJANGO_ALLOWED_HOSTS",
-    "DATABASE_URL",
-]
+REQUIRED_ENV_VARS = (
+    []
+    if DEBUG
+    else [
+        "DJANGO_SECRET_KEY",
+        "DJANGO_ALLOWED_HOSTS",
+        "DATABASE_URL",
+    ]
+)
 missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
 if missing:
-    raise ValueError(
-        f"Missing required environment variables: {', '.join(missing)}"
-    )
+    raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
 CSRF_TRUSTED_ORIGINS = []
 if not DEBUG and ALLOWED_HOSTS:
@@ -83,7 +83,7 @@ CLIENT_CERT_EXEMPT_PATHS = [
 # -------------------------
 INSTALLED_APPS = [
     "django_llm.apps.DjangoLlmConfig",
-    "newsite.apps.NewsiteConfig",
+    # "newsite.apps.NewsiteConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -130,8 +130,7 @@ WSGI_APPLICATION = "newsite.wsgi.application"
 # -------------------------
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}", conn_max_age=600
     )
 }
 
@@ -139,7 +138,9 @@ DATABASES = {
 # Password Validation
 # -------------------------
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
