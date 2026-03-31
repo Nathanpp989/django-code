@@ -1,5 +1,5 @@
 # -------------------------
-# Core
+# Django Core
 # -------------------------
 django>=4.1.6
 
@@ -15,10 +15,18 @@ dj-database-url
 python-dotenv
 
 # -------------------------
-# Server
+# Django Server
 # -------------------------
 gunicorn
 whitenoise
+
+# -------------------------
+# FastAPI and ASGI Server
+# -------------------------
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart
+httpx
 
 # -------------------------
 # LLM and MCP
@@ -43,8 +51,9 @@ django-debug-toolbar
 # -------------------------
 pytest
 pytest-django
-pytest-cov
+pytest-asyncio
 coverage
+httpx
 
 # -------------------------
 # Code quality

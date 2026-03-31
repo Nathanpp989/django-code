@@ -3,7 +3,7 @@
 # Usage: make <command>
 # =============================================================================
 
-.PHONY: run dev test pytest migrate static certs nginx superuser shell clean logs help
+.PHONY: run dev test pytest fastapi migrate static certs nginx superuser shell clean logs help
 
 # -------------------------
 # Running
@@ -14,12 +14,24 @@ run:
 	@chmod +x start.sh && ./start.sh
 
 dev:
-	@echo "Starting development server..."
+	@echo "Starting Django development server..."
 	@ollama serve & python manage.py runserver
 
+fastapi:
+	@echo "Starting FastAPI development server..."
+	@uvicorn fastapi_app.main:app --host 127.0.0.1 --port 8001 --reload
+
+dev-all:
+	@echo "Starting Django + FastAPI in development mode..."
+	@ollama serve &
+	@uvicorn fastapi_app.main:app --host 127.0.0.1 --port 8001 --reload &
+	@python manage.py runserver
+
 gunicorn:
-	@echo "Starting Gunicorn..."
 	@python -m gunicorn --workers 3 --timeout 120 --bind 127.0.0.1:8000 --reload newsite.wsgi:application
+
+uvicorn:
+	@uvicorn fastapi_app.main:app --host 127.0.0.1 --port 8001 --workers 2
 
 # -------------------------
 # Testing
@@ -29,12 +41,18 @@ test:
 	@echo "Running Django tests..."
 	@python manage.py test django_llm -v 2
 
+test-fastapi:
+	@echo "Running FastAPI tests..."
+	@python manage.py test fastapi_app.tests -v 2
+
+test-all:
+	@echo "Running all tests..."
+	@python manage.py test django_llm fastapi_app -v 2
+
 pytest:
-	@echo "Running pytest with coverage..."
-	@pytest --cov=django_llm --cov-report=term-missing
+	@pytest --cov=django_llm --cov=fastapi_app --cov-report=term-missing
 
 test-ollama:
-	@echo "Testing Ollama integration..."
 	@python test_ollama.py
 
 # -------------------------
@@ -42,27 +60,21 @@ test-ollama:
 # -------------------------
 
 migrate:
-	@echo "Running migrations..."
 	@python manage.py makemigrations && python manage.py migrate
 
 migrate-check:
-	@echo "Checking for missing migrations..."
 	@python manage.py makemigrations --check --dry-run
 
 reset-db:
-	@echo "Resetting database..."
 	@find . -path "*/migrations/0*.py" -delete
 	@rm -f db.sqlite3
-	@python manage.py makemigrations
-	@python manage.py migrate
-	@echo "Database reset complete"
+	@python manage.py makemigrations && python manage.py migrate
 
 # -------------------------
 # Static files
 # -------------------------
 
 static:
-	@echo "Collecting static files..."
 	@python manage.py collectstatic --noinput
 
 # -------------------------
@@ -70,11 +82,9 @@ static:
 # -------------------------
 
 certs:
-	@echo "Generating SSL certificates..."
 	@chmod +x generate_certs.sh && ./generate_certs.sh
 
 check-certs:
-	@echo "Checking certificate expiry..."
 	@python manage.py check_certs
 
 # -------------------------
@@ -82,12 +92,10 @@ check-certs:
 # -------------------------
 
 nginx:
-	@echo "Deploying NGINX config..."
 	@sudo cp nginx.conf /etc/nginx/sites-available/django_llm
 	@sudo ln -sf /etc/nginx/sites-available/django_llm /etc/nginx/sites-enabled/
 	@sudo rm -f /etc/nginx/sites-enabled/default
 	@sudo nginx -t && sudo service nginx restart
-	@echo "NGINX deployed and restarted"
 
 nginx-test:
 	@sudo nginx -t
@@ -95,18 +103,17 @@ nginx-test:
 nginx-reload:
 	@sudo service nginx reload
 
-nginx-restart:
-	@sudo service nginx restart
-
 nginx-logs:
 	@sudo tail -f /var/log/nginx/django_llm_access.log
+
+fastapi-logs:
+	@sudo tail -f /var/log/nginx/fastapi_access.log
 
 # -------------------------
 # Process management
 # -------------------------
 
 supervisor:
-	@echo "Setting up supervisor..."
 	@sudo apt-get install -y supervisor
 	@sudo cp django_llm_supervisor.conf /etc/supervisor/conf.d/django_llm.conf
 	@sudo supervisorctl reread && sudo supervisorctl update
@@ -135,6 +142,15 @@ check-deploy:
 	@python manage.py check --deploy
 
 # -------------------------
+# API docs
+# -------------------------
+
+docs:
+	@echo "FastAPI docs available at:"
+	@echo "  https://localhost:8443/api/docs"
+	@echo "  https://localhost:8443/api/redoc"
+
+# -------------------------
 # Logs
 # -------------------------
 
@@ -143,6 +159,9 @@ logs:
 
 logs-gunicorn:
 	@tail -f /var/log/gunicorn_access.log
+
+logs-uvicorn:
+	@tail -f /var/log/uvicorn.out.log
 
 logs-nginx:
 	@sudo tail -f /var/log/nginx/django_llm_access.log
@@ -155,39 +174,29 @@ logs-mtls:
 # -------------------------
 
 clean:
-	@echo "Cleaning up..."
 	@find . -name "*.pyc" -delete
 	@find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 	@rm -f debug.log
-	@echo "Cleanup complete"
 
 clean-summaries:
-	@echo "Clearing LLM summaries from database..."
-	@python manage.py shell -c "from django_llm.models import LLMSummary; count = LLMSummary.objects.count(); LLMSummary.objects.all().delete(); print(f'Deleted {count} summaries')"
+	@python manage.py shell -c "from django_llm.models import LLMSummary; c = LLMSummary.objects.count(); LLMSummary.objects.all().delete(); print(f'Deleted {c} summaries')"
 
 # -------------------------
 # Installation
 # -------------------------
 
 install:
-	@echo "Installing dependencies..."
 	@pip install -r requirements.txt --break-system-packages
-
-install-dev:
-	@echo "Installing dev dependencies..."
-	@pip install -r requirements.txt pytest pytest-django coverage black flake8 --break-system-packages
 
 # -------------------------
 # Code quality
 # -------------------------
 
 lint:
-	@echo "Running flake8..."
-	@flake8 django_llm/ --max-line-length=100 --exclude=migrations
+	@flake8 django_llm/ fastapi_app/ --max-line-length=100 --exclude=migrations
 
 format:
-	@echo "Running black..."
-	@black django_llm/ --exclude=migrations
+	@black django_llm/ fastapi_app/ --exclude=migrations
 
 # -------------------------
 # Help
@@ -198,27 +207,28 @@ help:
 	@echo "Django LLM - Available commands:"
 	@echo ""
 	@echo "  Running:"
-	@echo "    make run           - Start full stack (Ollama + NGINX + Gunicorn)"
-	@echo "    make dev           - Start development server"
-	@echo "    make gunicorn      - Start Gunicorn only"
+	@echo "    make run           - Start full stack"
+	@echo "    make dev           - Django dev server only"
+	@echo "    make fastapi       - FastAPI dev server only"
+	@echo "    make dev-all       - Django + FastAPI dev servers"
 	@echo ""
 	@echo "  Testing:"
 	@echo "    make test          - Run Django tests"
+	@echo "    make test-fastapi  - Run FastAPI tests"
+	@echo "    make test-all      - Run all tests"
 	@echo "    make pytest        - Run pytest with coverage"
-	@echo "    make test-ollama   - Test Ollama integration"
+	@echo ""
+	@echo "  API:"
+	@echo "    make docs          - Show API docs URLs"
+	@echo "    make fastapi-logs  - Tail FastAPI NGINX logs"
 	@echo ""
 	@echo "  Database:"
 	@echo "    make migrate       - Run migrations"
-	@echo "    make reset-db      - Reset database completely"
+	@echo "    make reset-db      - Reset database"
 	@echo ""
-	@echo "  NGINX:"
+	@echo "  Other:"
 	@echo "    make nginx         - Deploy NGINX config"
-	@echo "    make nginx-logs    - Tail NGINX access logs"
-	@echo ""
-	@echo "  Utilities:"
-	@echo "    make superuser     - Create Django superuser"
-	@echo "    make shell         - Open Django shell"
-	@echo "    make check-deploy  - Run Django deployment check"
-	@echo "    make clean         - Remove .pyc files and logs"
-	@echo "    make logs          - Tail debug.log"
+	@echo "    make certs         - Generate SSL certificates"
+	@echo "    make supervisor    - Set up supervisor"
+	@echo "    make help          - Show this help"
 	@echo ""
