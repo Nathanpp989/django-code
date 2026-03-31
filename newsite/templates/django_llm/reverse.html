@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Reverse LLM - {{ response.pk }}{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Reverse LLM Entry #{{ response.pk }}</h2>
+    <table>
+        <tr>
+            <th>String</th>
+            <td>{{ response.new_string|default:"Not set" }}</td>
+        </tr>
+        <tr>
+            <th>Number</th>
+            <td>{{ response.new_number|default:"Not set" }}</td>
+        </tr>
+        <tr>
+            <th>Created</th>
+            <td>{{ response.created_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if llm_summary %}
+    <div class="llm-summary">
+        <h3>AI Analysis</h3>
+        <p>{{ llm_summary }}</p>
+    </div>
+{% endif %}
+
+{% if not ollama_available %}
+    <div class="llm-unavailable">
+        Ollama is offline. Start it with: <code>ollama serve</code>
+    </div>
+{% endif %}
+
+<a href="{% url 'django_llm:index' %}" class="btn" style="background: #888;">Back</a>
+{% endblock %}

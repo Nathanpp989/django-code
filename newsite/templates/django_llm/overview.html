@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Database Overview{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Database Overview</h2>
+    <p>An AI-generated summary of all data in the system.</p>
+
+    {% if not ollama_available %}
+        <div class="llm-unavailable">
+            Ollama is not available. Start it with: <code>ollama serve</code>
+        </div>
+    {% endif %}
+
+    {% if not mcp_available %}
+        <div class="llm-unavailable">
+            MCP tools are not available. Check your server logs for details.
+        </div>
+    {% endif %}
+
+    {% if overview %}
+        <div class="llm-summary">
+            <h3>AI Summary</h3>
+            <p>{{ overview }}</p>
+        </div>
+    {% else %}
+        <p>No data available yet. Add some LLM entries and conversions first.</p>
+    {% endif %}
+
+    <br>
+    <a href="{% url 'django_llm:index' %}">Back to Home</a>
+</div>
+{% endblock %}

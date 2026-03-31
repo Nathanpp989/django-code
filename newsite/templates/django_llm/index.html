@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Django LLM - Home{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome to Django LLM</h2>
+    <p>{{ message }}</p>
+    <br>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{% url 'django_llm:chat' %}" class="btn btn-success">Open Chat</a>
+        <a href="{% url 'django_llm:overview' %}" class="btn">Database Overview</a>
+        <a href="{% url 'django_llm:create_llm' %}" class="btn">New LLM Entry</a>
+        <a href="{% url 'django_llm:create_convert' %}" class="btn">New Conversion</a>
+    </div>
+</div>
+
+{% if recent_llm %}
+<div class="card">
+    <h3>Recent LLM Entries</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Text</th>
+                <th>Date Used</th>
+                <th>Choices</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in recent_llm %}
+            <tr>
+                <td>{{ entry.llm_text }}</td>
+                <td>{{ entry.llm_date_used|date:"Y-m-d H:i" }}</td>
+                <td>{{ entry.choices.count }}</td>
+                <td>
+                    <a href="{% url 'django_llm:detail' entry.pk %}">Vote</a> |
+                    <a href="{% url 'django_llm:results' entry.pk %}">Results</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if recent_converts %}
+<div class="card">
+    <h3>Recent Conversions</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>String</th>
+                <th>Character Count</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in recent_converts %}
+            <tr>
+                <td>{{ entry.new_string|truncatechars:50 }}</td>
+                <td>{{ entry.new_number }}</td>
+                <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <a href="{% url 'django_llm:convertstr' entry.pk %}">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

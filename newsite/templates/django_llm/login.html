@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Login - Django LLM{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 400px; margin: 0 auto;">
+    <h2>Login</h2>
+
+    {% if form.errors %}
+        <div class="message-error">
+            Invalid username or password. Please try again.
+        </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}
+                    <span style="color: red; font-size: 13px;">{{ error }}</span>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        <input type="submit" value="Login" style="width: 100%; margin-top: 10px;">
+    </form>
+</div>
+{% endblock %}

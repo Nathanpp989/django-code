@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Create LLM Entry{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Create New LLM Entry</h2>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <span class="helptext">{{ field.help_text }}</span>
+                {% endif %}
+                {% for error in field.errors %}
+                    <span style="color: red; font-size: 13px;">{{ error }}</span>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        <input type="submit" value="Create Entry">
+        <a href="{% url 'django_llm:index' %}" class="btn" style="margin-left: 10px; background: #888;">Cancel</a>
+    </form>
+</div>
+{% endblock %}

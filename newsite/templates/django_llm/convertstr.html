@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Converts <span style =" color: navy; font:bold">string </span>to <span style="color:maroon; font:bold">number </span>number using LLM</title>
+</head>
+<body>
+    <h1>Convert any string to a number: </h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_str }}
+    <button type ="submit">Submit string</button>
+    </form>
+
+    {% if result_num is not None %}
+    <h2>Result: </h2>
+    <p>Input string was: "{{input_str}}"</p>
+    <p>New number is: "{{result_num}}"</p>
+    {% endif %}
+
+</body>
+</html>
