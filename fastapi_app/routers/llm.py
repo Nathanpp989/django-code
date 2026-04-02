@@ -41,9 +41,7 @@ router = APIRouter()
 def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
     """Serialize a NewLLM instance to a dict."""
     choices = entry.choices.all()
-    total_votes = choices.aggregate(
-        total=Sum("amount")
-    )["total"] or 0
+    total_votes = choices.aggregate(total=Sum("amount"))["total"] or 0
 
     data = {
         "id": entry.pk,
@@ -74,11 +72,12 @@ def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
 # List and Create
 # -------------------------
 
+
 @router.get(
     "/",
     response_model=PaginatedResponse,
     summary="List LLM entries",
-    description="Returns a paginated list of all LLM entries."
+    description="Returns a paginated list of all LLM entries.",
 )
 async def list_llm_entries(
     page: int = Query(1, ge=1, description="Page number"),
@@ -93,7 +92,7 @@ async def list_llm_entries(
 
     total = queryset.count()
     offset = (page - 1) * page_size
-    entries = queryset[offset:offset + page_size]
+    entries = queryset[offset : offset + page_size]
 
     return {
         "count": total,
@@ -108,7 +107,7 @@ async def list_llm_entries(
     "/",
     status_code=status.HTTP_201_CREATED,
     summary="Create LLM entry",
-    description="Creates a new LLM entry with optional choices."
+    description="Creates a new LLM entry with optional choices.",
 )
 async def create_llm_entry(
     payload: NewLLMCreate,
@@ -120,10 +119,7 @@ async def create_llm_entry(
         for choice_text in payload.choices:
             choice_text = choice_text.strip()
             if choice_text:
-                LLMChoice.objects.create(
-                    new_llm=entry,
-                    choice_text=choice_text
-                )
+                LLMChoice.objects.create(new_llm=entry, choice_text=choice_text)
 
     logger.info(f"User {user.username} created NewLLM pk={entry.pk}")
     return serialize_llm(entry, include_choices=True)
@@ -133,10 +129,11 @@ async def create_llm_entry(
 # Single entry operations
 # -------------------------
 
+
 @router.get(
     "/{llm_id}",
     summary="Get LLM entry",
-    description="Returns a single LLM entry with all its choices."
+    description="Returns a single LLM entry with all its choices.",
 )
 async def get_llm_entry(
     llm_id: int,
@@ -147,7 +144,7 @@ async def get_llm_entry(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
     return serialize_llm(entry, include_choices=True)
 
@@ -155,7 +152,7 @@ async def get_llm_entry(
 @router.patch(
     "/{llm_id}",
     summary="Update LLM entry",
-    description="Updates the text of an LLM entry."
+    description="Updates the text of an LLM entry.",
 )
 async def update_llm_entry(
     llm_id: int,
@@ -167,7 +164,7 @@ async def update_llm_entry(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
 
     if payload.llm_text:
@@ -182,7 +179,7 @@ async def update_llm_entry(
     "/{llm_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete LLM entry",
-    description="Deletes an LLM entry and all its choices and summaries."
+    description="Deletes an LLM entry and all its choices and summaries.",
 )
 async def delete_llm_entry(
     llm_id: int,
@@ -193,12 +190,10 @@ async def delete_llm_entry(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
 
-    LLMSummary.objects.filter(
-        content_type="results", object_id=llm_id
-    ).delete()
+    LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
     entry.delete()
     logger.info(f"User {user.username} deleted NewLLM pk={llm_id}")
 
@@ -207,10 +202,11 @@ async def delete_llm_entry(
 # Voting
 # -------------------------
 
+
 @router.post(
     "/{llm_id}/vote",
     summary="Vote for a choice",
-    description="Records a vote for a specific choice in an LLM entry."
+    description="Records a vote for a specific choice in an LLM entry.",
 )
 async def vote_for_choice(
     llm_id: int,
@@ -222,25 +218,23 @@ async def vote_for_choice(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
 
     try:
         with transaction.atomic():
             choice = entry.choices.select_for_update().get(pk=payload.choice_id)
-            choice.amount = F('amount') + 1
+            choice.amount = F("amount") + 1
             choice.save()
             choice.refresh_from_db()
     except LLMChoice.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Choice {payload.choice_id} not found in entry {llm_id}."
+            detail=f"Choice {payload.choice_id} not found in entry {llm_id}.",
         )
 
     # Invalidate cached summary
-    LLMSummary.objects.filter(
-        content_type="results", object_id=llm_id
-    ).delete()
+    LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
 
     logger.info(
         f"User {user.username} voted for choice {payload.choice_id} "
@@ -258,7 +252,7 @@ async def vote_for_choice(
 @router.get(
     "/{llm_id}/results",
     summary="Get voting results",
-    description="Returns detailed voting results for an LLM entry."
+    description="Returns detailed voting results for an LLM entry.",
 )
 async def get_voting_results(
     llm_id: int,
@@ -269,7 +263,7 @@ async def get_voting_results(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
 
     choices = entry.choices.order_by("-amount")
@@ -298,11 +292,12 @@ async def get_voting_results(
 # Choice management
 # -------------------------
 
+
 @router.post(
     "/{llm_id}/choices",
     status_code=status.HTTP_201_CREATED,
     summary="Add choice",
-    description="Adds a new choice to an LLM entry."
+    description="Adds a new choice to an LLM entry.",
 )
 async def add_choice(
     llm_id: int,
@@ -314,13 +309,10 @@ async def add_choice(
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"LLM entry {llm_id} not found."
+            detail=f"LLM entry {llm_id} not found.",
         )
 
-    choice = LLMChoice.objects.create(
-        new_llm=entry,
-        choice_text=payload.choice_text
-    )
+    choice = LLMChoice.objects.create(new_llm=entry, choice_text=payload.choice_text)
 
     return {
         "id": choice.pk,
@@ -334,7 +326,7 @@ async def add_choice(
     "/{llm_id}/choices/{choice_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete choice",
-    description="Deletes a choice from an LLM entry."
+    description="Deletes a choice from an LLM entry.",
 )
 async def delete_choice(
     llm_id: int,
@@ -346,7 +338,7 @@ async def delete_choice(
     except LLMChoice.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Choice {choice_id} not found in entry {llm_id}."
+            detail=f"Choice {choice_id} not found in entry {llm_id}.",
         )
     choice.delete()
     logger.info(f"User {user.username} deleted choice {choice_id}")

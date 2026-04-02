@@ -74,3 +74,9 @@ WARNING 2026-03-26 23:07:05,879 apps Ollama is not running. LLM features will be
 WARNING 2026-03-26 23:07:19,197 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-26 23:07:20,113 mcp_client MCP tools unavailable: No module named 'django_llm.mcp_server'
 WARNING 2026-03-26 23:07:20,137 log Not Found: /static/django_llm/style.css
+WARNING 2026-04-01 20:43:22,888 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-01 20:43:24,902 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-01 20:43:26,897 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-02 16:31:25,338 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-02 16:31:25,338 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-02 16:31:25,339 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve

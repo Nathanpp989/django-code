@@ -46,10 +46,11 @@ def serialize_convert(entry: ConvertLLM) -> dict:
 # Must be before /{id} to avoid routing conflict
 # -------------------------
 
+
 @router.get(
     "/stats",
     summary="Conversion statistics",
-    description="Returns aggregate statistics about all conversions."
+    description="Returns aggregate statistics about all conversions.",
 )
 async def get_conversion_stats(
     user: User = Depends(get_current_user),
@@ -72,11 +73,12 @@ async def get_conversion_stats(
 # List and Create
 # -------------------------
 
+
 @router.get(
     "/",
     response_model=PaginatedResponse,
     summary="List conversions",
-    description="Returns a paginated list of all string conversions."
+    description="Returns a paginated list of all string conversions.",
 )
 async def list_conversions(
     page: int = Query(1, ge=1),
@@ -91,7 +93,7 @@ async def list_conversions(
 
     total = queryset.count()
     offset = (page - 1) * page_size
-    entries = queryset[offset:offset + page_size]
+    entries = queryset[offset : offset + page_size]
 
     return {
         "count": total,
@@ -106,15 +108,14 @@ async def list_conversions(
     "/",
     status_code=status.HTTP_201_CREATED,
     summary="Create conversion",
-    description="Creates a new string conversion entry."
+    description="Creates a new string conversion entry.",
 )
 async def create_conversion(
     payload: ConvertLLMCreate,
     user: User = Depends(get_current_user),
 ):
     entry = ConvertLLM.objects.create(
-        new_string=payload.input_string,
-        new_number=len(payload.input_string)
+        new_string=payload.input_string, new_number=len(payload.input_string)
     )
     logger.info(f"User {user.username} created ConvertLLM pk={entry.pk}")
     return serialize_convert(entry)
@@ -124,10 +125,11 @@ async def create_conversion(
 # Single entry operations
 # -------------------------
 
+
 @router.get(
     "/{convert_id}",
     summary="Get conversion",
-    description="Returns a single conversion entry."
+    description="Returns a single conversion entry.",
 )
 async def get_conversion(
     convert_id: int,
@@ -138,7 +140,7 @@ async def get_conversion(
     except ConvertLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversion {convert_id} not found."
+            detail=f"Conversion {convert_id} not found.",
         )
     return serialize_convert(entry)
 
@@ -146,7 +148,7 @@ async def get_conversion(
 @router.patch(
     "/{convert_id}",
     summary="Update conversion",
-    description="Updates the string content of a conversion entry."
+    description="Updates the string content of a conversion entry.",
 )
 async def update_conversion(
     convert_id: int,
@@ -158,7 +160,7 @@ async def update_conversion(
     except ConvertLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversion {convert_id} not found."
+            detail=f"Conversion {convert_id} not found.",
         )
 
     entry.new_string = payload.input_string
@@ -166,9 +168,7 @@ async def update_conversion(
     entry.save()
 
     # Invalidate any cached summary
-    LLMSummary.objects.filter(
-        content_type="convert", object_id=convert_id
-    ).delete()
+    LLMSummary.objects.filter(content_type="convert", object_id=convert_id).delete()
 
     logger.info(f"User {user.username} updated ConvertLLM pk={convert_id}")
     return serialize_convert(entry)
@@ -178,7 +178,7 @@ async def update_conversion(
     "/{convert_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete conversion",
-    description="Deletes a conversion entry and its associated summaries."
+    description="Deletes a conversion entry and its associated summaries.",
 )
 async def delete_conversion(
     convert_id: int,
@@ -189,11 +189,9 @@ async def delete_conversion(
     except ConvertLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Conversion {convert_id} not found."
+            detail=f"Conversion {convert_id} not found.",
         )
 
-    LLMSummary.objects.filter(
-        content_type="convert", object_id=convert_id
-    ).delete()
+    LLMSummary.objects.filter(content_type="convert", object_id=convert_id).delete()
     entry.delete()
     logger.info(f"User {user.username} deleted ConvertLLM pk={convert_id}")

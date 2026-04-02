@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
     logger.info("FastAPI starting up...")
     try:
         import ollama
+
         ollama.list()
         logger.info("Ollama is available")
     except Exception:
@@ -96,10 +97,10 @@ app.add_middleware(
 # Routers
 # Each router handles a group of endpoints
 # -------------------------
-app.include_router(health.router,  prefix="/api",       tags=["Health"])
-app.include_router(llm.router,     prefix="/api/llm",   tags=["LLM Entries"])
+app.include_router(health.router, prefix="/api", tags=["Health"])
+app.include_router(llm.router, prefix="/api/llm", tags=["LLM Entries"])
 app.include_router(convert.router, prefix="/api/convert", tags=["Conversions"])
-app.include_router(chat.router,    prefix="/api/chat",  tags=["Chat"])
+app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 
 
 # -------------------------
@@ -107,8 +108,10 @@ app.include_router(chat.router,    prefix="/api/chat",  tags=["Chat"])
 # -------------------------
 @app.get("/api", include_in_schema=False)
 async def api_root():
-    return JSONResponse({
-        "message": "Django LLM API",
-        "docs": "/api/docs",
-        "version": "1.0.0",
-    })
+    return JSONResponse(
+        {
+            "message": "Django LLM API",
+            "docs": "/api/docs",
+            "version": "1.0.0",
+        }
+    )
