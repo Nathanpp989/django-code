@@ -46,19 +46,17 @@ def get_or_create_summary(
     """
     prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
     try:
-        existing = LLMSummary.objects.get(prompt_hash=prompt_hash)
-        logger.debug(f"Using cached summary for {content_type} #{object_id}")
-        return existing.summary
+        summary_obj = LLMSummary.objects.get(prompt_hash=prompt_hash)
+        return summary_obj.summary
     except LLMSummary.DoesNotExist:
-        summary = mcp_client.chat_with_tools(prompt)
+        # Generate new summary using MCP client
+        summary = mcp_client.generate_summary(prompt)
         LLMSummary.objects.create(
+            prompt_hash=prompt_hash,
             content_type=content_type,
             object_id=object_id,
-            prompt_hash=prompt_hash,
             summary=summary,
-            model_used="llama3"
         )
-        logger.debug(f"Generated and saved summary for {content_type} #{object_id}")
         return summary
 
 
@@ -84,6 +82,11 @@ def health_check_view(request):
     Health check endpoint for monitoring and load balancers.
     Returns status of Django, database, Ollama and MCP.
     """
+    cache_key = "health_check_status"
+    cached_status = cache.get(cache_key)
+    if cached_status:
+        return JsonResponse(cached_status, status=200 if cached_status["database"] == "ok" else 500)
+
     status = {
         "django": "ok",
         "database": "ok",
@@ -98,6 +101,7 @@ def health_check_view(request):
         logger.error(f"Health check database error: {e}")
 
     http_status = 200 if status["database"] == "ok" else 500
+    cache.set(cache_key, status, timeout=30)  # Cache for 30 seconds
     return JsonResponse(status, status=http_status)
 
 
@@ -148,7 +152,7 @@ def convert_num_view(request, pk):
 
 @login_required
 def detail_view(request, pk):
-    response = get_object_or_404(NewLLM, pk=pk)
+    response = get_object_or_404(NewLLM.objects.select_related(), pk=pk)
     return render(request, "django_llm/detail.html", {
         "response": response,
         "amounts": response.choices.all(),
@@ -159,7 +163,7 @@ def detail_view(request, pk):
 
 @login_required
 def results_view(request, pk):
-    response = get_object_or_404(NewLLM, pk=pk)
+    response = get_object_or_404(NewLLM.objects.prefetch_related('choices'), pk=pk)
     amounts = response.choices.all()
 
     llm_summary = None
@@ -240,13 +244,16 @@ def reverse_llm_view(request, pk):
 
 @login_required
 def database_overview_view(request):
-    prompt = (
-        "Use the get_database_stats tool and get_all_voting_results tool "
-        "to give me a concise overview of all the data in the Django LLM "
-        "database. Summarise the key statistics and any interesting patterns."
-    )
-    overview = get_or_create_summary(prompt, "overview", 0)
-
+    cache_key = "database_overview_summary"
+    overview = cache.get(cache_key)
+    if overview is None:
+        prompt = (
+            "Use the get_database_stats tool and get_all_voting_results tool "
+            "to give me a concise overview of all the data in the Django LLM "
+            "database. Summarise the key statistics and any interesting patterns."
+        )
+        overview = get_or_create_summary(prompt, "overview", 0)
+        cache.set(cache_key, overview, timeout=300)  # Cache for 5 minutes
     return render(request, "django_llm/overview.html", {
         "overview": overview,
         "ollama_available": OLLAMA_AVAILABLE,
@@ -356,9 +363,9 @@ def chat_message_view(request):
         ai_response = "Ollama is not available. Please start it with: ollama serve"
     else:
         try:
-            history = ChatMessage.objects.filter(
+            history = list(ChatMessage.objects.filter(
                 user=request.user
-            ).order_by("created_at").values("role", "content")
+            ).order_by("created_at").values("role", "content"))
 
             ollama_messages = [
                 {"role": msg["role"], "content": msg["content"]}
@@ -388,6 +395,7 @@ def chat_message_view(request):
     )
 
     return JsonResponse({"response": ai_response, "status": "success"})
+
 
 
 @login_required

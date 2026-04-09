@@ -21,6 +21,10 @@ fastapi:
 	@echo "Starting FastAPI development server..."
 	@uvicorn fastapi_app.main:app --host 127.0.0.1 --port 8001 --reload
 
+fastapi-gunicorn:
+    @echo "Starting FastAPI with Gunicorn + Uvicorn workers..."
+    @python -m gunicorn -c gunicorn_conf.py fastapi_app.main:app
+
 dev-all:
 	@echo "Starting Django + FastAPI in development mode..."
 	@ollama serve &
@@ -32,6 +36,10 @@ gunicorn:
 
 uvicorn:
 	@uvicorn fastapi_app.main:app --host 127.0.0.1 --port 8001 --workers 2
+
+docker-fastapi:
+    @echo "Starting FastAPI container with Docker socket access..."
+    @cd .. && docker-compose up --build fastapi
 
 # -------------------------
 # Testing
