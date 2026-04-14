@@ -47,6 +47,13 @@ if not DEBUG and ALLOWED_HOSTS:
         else:
             CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
 
+# -------------------------
+# FastAPI Integration
+# -------------------------
+FASTAPI_ENABLED = os.getenv("FASTAPI_ENABLED", "True").lower() in ("1", "true", "yes")
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://127.0.0.1:8001")
+FASTAPI_API_TIMEOUT = int(os.getenv("FASTAPI_API_TIMEOUT", "30"))
+
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -63,6 +70,12 @@ SECURE_HSTS_PRELOAD = not DEBUG
 SESSION_COOKIE_AGE = 1209600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = False
+SECURE_CONTENT_SECURITY_POLICY = {
+    "default-src": ("'self'",),
+    "script-src": ("'self'", "'unsafe-inline'"),
+    "style-src": ("'self'", "'unsafe-inline'"),
+    "font-src": ("'self'",),
+}
 
 # -------------------------
 # Client Certificate Settings
@@ -83,7 +96,6 @@ CLIENT_CERT_EXEMPT_PATHS = [
 # -------------------------
 INSTALLED_APPS = [
     "django_llm.apps.DjangoLlmConfig",
-    # "newsite.apps.NewsiteConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -91,11 +103,13 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_extensions",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django_llm.middleware.ClientCertificateMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -103,6 +117,28 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+# -------------------------
+# CORS Settings (for FastAPI integration)
+# -------------------------
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
+    "https://localhost:8443",
+    "https://127.0.0.1:8443",
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 ROOT_URLCONF = "newsite.urls"
@@ -141,7 +177,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -179,8 +215,17 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "django-llm-cache",
+        "OPTIONS": {
+            "MAX_ENTRIES": 10000,
+        }
     }
 }
+
+# -------------------------
+# Session Configuration
+# -------------------------
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_CACHE_ALIAS = "default"
 
 # -------------------------
 # Ollama Settings
@@ -200,15 +245,25 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
+        "json": {
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "format": "%(asctime)s %(name)s %(levelname)s %(message)s"
+        }
     },
     "handlers": {
         "file": {
             "class": "logging.FileHandler",
             "filename": BASE_DIR / "debug.log",
             "formatter": "verbose",
+            "level": "DEBUG" if DEBUG else "INFO",
         },
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "fastapi": {
+            "class": "logging.FileHandler",
+            "filename": BASE_DIR / "fastapi.log",
             "formatter": "verbose",
         },
     },
@@ -224,7 +279,12 @@ LOGGING = {
         },
         "django_llm": {
             "handlers": ["file", "console"],
-            "level": "DEBUG" if DEBUG else "WARNING",
+            "level": "DEBUG" if DEBUG else "INFO",
+            "propagate": False,
+        },
+        "fastapi": {
+            "handlers": ["fastapi", "console"],
+            "level": "DEBUG" if DEBUG else "INFO",
             "propagate": False,
         },
     },

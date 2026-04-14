@@ -24,6 +24,9 @@ from datetime import timedelta
 from django.utils import timezone
 from django.http import Http404
 import time
+from django.conf import settings
+import requests
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +183,16 @@ def index_view(request):
         )
         cache.set(cache_key_converts, recent_converts, timeout=60)
     
+    # Check FastAPI health
+    fastapi_health = None
+    if settings.FASTAPI_ENABLED:
+        fastapi_health = call_fastapi_api("/api/health")
+    
     context = {
         "message": "Django LLM with MCP server integration.",
         "ollama_available": OLLAMA_AVAILABLE,
         "mcp_available": MCP_AVAILABLE,
+        "fastapi_available": fastapi_health is not None,
         "recent_llm": recent_llm,
         "recent_converts": recent_converts,
     }
@@ -1266,3 +1275,93 @@ def export_llm_data_view(request):
         logger.error(f"Error exporting LLM data: {e}")
         messages.error(request, "Failed to export data.")
         return redirect("django_llm:index")
+
+
+# -------------------------
+# FastAPI Integration Helpers
+# -------------------------
+
+def get_fastapi_client_session():
+    """Get requests session for FastAPI communication."""
+    session = requests.Session()
+    session.headers.update({
+        "Content-Type": "application/json",
+        "User-Agent": "Django-LLM/1.0",
+    })
+    return session
+
+def call_fastapi_api(endpoint: str, method: str = "GET", data: dict = None, timeout: int = None):
+    """
+    Call FastAPI endpoint with error handling.
+    
+    Args:
+        endpoint: API endpoint path (e.g., "/api/llm/entries")
+        method: HTTP method (GET, POST, etc.)
+        data: Request body data
+        timeout: Request timeout in seconds
+    
+    Returns:
+        Response data or None on error
+    """
+    if not settings.FASTAPI_ENABLED:
+        logger.warning("FastAPI is disabled")
+        return None
+    
+    timeout = timeout or settings.FASTAPI_API_TIMEOUT
+    url = f"{settings.FASTAPI_URL}{endpoint}"
+    
+    try:
+        session = get_fastapi_client_session()
+        
+        if method == "GET":
+            response = session.get(url, timeout=timeout)
+        elif method == "POST":
+            response = session.post(url, json=data, timeout=timeout)
+        elif method == "PUT":
+            response = session.put(url, json=data, timeout=timeout)
+        elif method == "DELETE":
+            response = session.delete(url, timeout=timeout)
+        else:
+            raise ValueError(f"Unsupported method: {method}")
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        logger.error(f"FastAPI timeout: {url}")
+        return None
+    except requests.exceptions.ConnectionError:
+        logger.error(f"FastAPI connection error: {url}")
+        return None
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"FastAPI HTTP error {e.response.status_code}: {url}")
+        return None
+    except Exception as e:
+        logger.error(f"FastAPI error: {e}")
+        return None
+
+def sync_to_fastapi(resource_type: str, action: str = "create"):
+    """
+    Decorator to sync Django model changes to FastAPI.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            response = view_func(request, *args, **kwargs)
+            
+            # Sync to FastAPI if enabled
+            if settings.FASTAPI_ENABLED and hasattr(response, 'url'):
+                try:
+                    # Extract resource ID from redirect URL
+                    if resource_type == "llm" and "detail" in response.url:
+                        llm_id = kwargs.get('pk') or args[0]
+                        call_fastapi_api(
+                            f"/api/llm/{llm_id}/sync",
+                            method="POST",
+                            data={"action": action}
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to sync to FastAPI: {e}")
+            
+            return response
+        return wrapper
+    return decorator
