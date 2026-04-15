@@ -151,3 +151,11 @@ WARNING 2026-04-08 18:50:23,783 apps Ollama is not running. LLM features will be
 WARNING 2026-04-08 19:14:54,473 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-08 19:14:56,202 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-08 19:14:58,183 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 18:40:42,144 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 18:40:42,146 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 18:40:42,151 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 18:41:26,525 main Docker unavailable from FastAPI: No module named 'docker'
+WARNING 2026-04-13 18:41:26,526 main Docker daemon is not accessible to FastAPI
+WARNING 2026-04-13 20:10:21,188 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 20:10:21,192 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-13 20:10:22,778 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
