@@ -26,7 +26,7 @@ whitenoise
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-multipart
-httpx
+httpx>=0.24.0
 
 # -------------------------
 # LLM and MCP
@@ -53,7 +53,6 @@ pytest
 pytest-django
 pytest-asyncio
 coverage
-httpx
 
 # -------------------------
 # Code quality
