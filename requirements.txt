@@ -45,6 +45,7 @@ redis
 # -------------------------
 django-extensions
 django-debug-toolbar
+django-cors-headers
 
 # -------------------------
 # Testing
@@ -59,3 +60,4 @@ coverage
 # -------------------------
 black
 flake8
+django-cors-headers

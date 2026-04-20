@@ -159,3 +159,7 @@ WARNING 2026-04-13 18:41:26,526 main Docker daemon is not accessible to FastAPI
 WARNING 2026-04-13 20:10:21,188 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-13 20:10:21,192 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-13 20:10:22,778 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 18:47:57,995 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 18:48:41,930 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 18:48:41,998 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 18:48:42,067 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
