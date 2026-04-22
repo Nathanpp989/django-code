@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.db import transaction, connection
-from django.db.models import F, Q, Prefetch
+from django.db.models import F, Q, Prefetch, Sum
 from django.core.cache import cache
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.core.exceptions import ValidationError, PermissionDenied
