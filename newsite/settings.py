@@ -70,12 +70,22 @@ SECURE_HSTS_PRELOAD = not DEBUG
 SESSION_COOKIE_AGE = 1209600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = False
-SECURE_CONTENT_SECURITY_POLICY = {
-    "default-src": ("'self'",),
-    "script-src": ("'self'", "'unsafe-inline'"),
-    "style-src": ("'self'", "'unsafe-inline'"),
-    "font-src": ("'self'",),
-}
+
+# Additional security settings
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
+# Content Security Policy (basic)
+SECURE_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'"
+)
 
 # -------------------------
 # Client Certificate Settings
@@ -177,14 +187,33 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 # -------------------------
-# Internationalisation
+# Cache
 # -------------------------
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    }
+}
+
+# Fallback to database cache if Redis is not available
+if not os.getenv("REDIS_URL"):
+    CACHES["default"] = {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "rate_limit_cache",
+    }
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
@@ -217,7 +246,7 @@ CACHES = {
         "LOCATION": "django-llm-cache",
         "OPTIONS": {
             "MAX_ENTRIES": 10000,
-        }
+        },
     }
 }
 
@@ -247,8 +276,8 @@ LOGGING = {
         },
         "json": {
             "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(asctime)s %(name)s %(levelname)s %(message)s"
-        }
+            "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
+        },
     },
     "handlers": {
         "file": {

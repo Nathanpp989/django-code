@@ -6,6 +6,7 @@ NGINX routes /api/ requests here.
 
 Shares Django's database and session authentication.
 """
+
 import os
 import sys
 import django
@@ -50,6 +51,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 # -------------------------
 # Environment Configuration
 # -------------------------
+
 
 def parse_env_list(value: Optional[str], default: list) -> list:
     if not value:
@@ -112,6 +114,7 @@ FASTAPI_DOCKER_TIMEOUT = int(os.environ.get("FASTAPI_DOCKER_TIMEOUT", "10"))
 # Async Cache Helpers
 # -------------------------
 
+
 async def cache_get(key: str) -> Any:
     return await sync_to_async(cache.get)(key)
 
@@ -128,9 +131,11 @@ async def cache_delete(key: str) -> None:
 # Service Availability Checks
 # -------------------------
 
+
 async def get_ollama_availability() -> bool:
     try:
         import ollama
+
         await sync_to_async(ollama.list)()
         return True
     except Exception as e:
@@ -195,6 +200,7 @@ async def get_cached_docker_info() -> Optional[Dict[str, Any]]:
 # Metrics and Monitoring
 # -------------------------
 
+
 class Metrics:
     def __init__(self):
         self.requests_total = 0
@@ -214,7 +220,8 @@ class Metrics:
     async def get_stats(self) -> Dict[str, Any]:
         avg_response_time = (
             sum(self.response_times) / len(self.response_times)
-            if self.response_times else 0
+            if self.response_times
+            else 0
         )
         return {
             "requests_total": self.requests_total,
@@ -223,6 +230,7 @@ class Metrics:
             "errors_total": self.errors_total,
         }
 
+
 metrics = Metrics()
 
 
@@ -230,14 +238,15 @@ metrics = Metrics()
 # Middleware for Metrics
 # -------------------------
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("FastAPI starting up...")
-    
+
     # Check service availability
     docker_available = await get_cached_docker_info()
     ollama_available = await get_cached_ollama_availability()
-    
+
     if docker_available:
         logger.info("Docker daemon is accessible to FastAPI")
     else:
@@ -247,84 +256,19 @@ async def lifespan(app: FastAPI):
         logger.info("Ollama is available")
     else:
         logger.warning("Ollama is not available on startup")
-    
+
     yield
-    
+
     logger.info("FastAPI shutting down...")
 
 
 # -------------------------
-# Exception Handlers
+# Exception Handlers (moved after app creation)
 # -------------------------
 
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    await metrics.record_error()
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail, "type": "http_exception"},
-    )
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    await metrics.record_error()
-    return JSONResponse(
-        status_code=422,
-        content={"detail": exc.errors(), "type": "validation_error"},
-    )
-
-
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    await metrics.record_error()
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Rate limit exceeded", "type": "rate_limit"},
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    await metrics.record_error()
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "type": "server_error"},
-    )
-
-
 # -------------------------
-# Request/Response Middleware
+# Request/Response Middleware (moved after app creation)
 # -------------------------
-
-@app.middleware("http")
-async def add_metrics_middleware(request: Request, call_next):
-    start_time = time.time()
-    
-    try:
-        response = await call_next(request)
-        response_time = time.time() - start_time
-        
-        await metrics.record_request(
-            request.url.path,
-            request.method,
-            response_time
-        )
-        
-        # Add response time header
-        response.headers["X-Response-Time"] = f"{response_time:.3f}s"
-        
-        return response
-    except Exception as e:
-        response_time = time.time() - start_time
-        await metrics.record_request(
-            request.url.path,
-            request.method,
-            response_time
-        )
-        raise
-
 
 # -------------------------
 # App Instance
@@ -339,6 +283,75 @@ app = FastAPI(
     openapi_url=FASTAPI_OPENAPI_URL,
     lifespan=lifespan,
 )
+
+# -------------------------
+# Exception Handlers
+# -------------------------
+
+
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    await metrics.record_error()
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "type": "http_exception"},
+    )
+
+
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    await metrics.record_error()
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "type": "validation_error"},
+    )
+
+
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    await metrics.record_error()
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded", "type": "rate_limit"},
+    )
+
+
+async def general_exception_handler(request: Request, exc: Exception):
+    await metrics.record_error()
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "type": "server_error"},
+    )
+
+
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+# -------------------------
+# Request/Response Middleware
+# -------------------------
+
+
+async def add_metrics_middleware(request: Request, call_next):
+    start_time = time.time()
+
+    try:
+        response = await call_next(request)
+        response_time = time.time() - start_time
+
+        await metrics.record_request(request.url.path, request.method, response_time)
+
+        # Add response time header
+        response.headers["X-Response-Time"] = f"{response_time:.3f}s"
+
+        return response
+    except Exception as e:
+        response_time = time.time() - start_time
+        await metrics.record_request(request.url.path, request.method, response_time)
+        raise
+
+
+app.middleware("http")(add_metrics_middleware)
 
 # -------------------------
 # Middleware
@@ -356,10 +369,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 # Trusted hosts for security
 if not settings.DEBUG:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS
-    )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 # -------------------------
 # Routers
@@ -374,6 +384,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 # -------------------------
 # API Endpoints
 # -------------------------
+
 
 @app.get("/api", include_in_schema=False)
 async def api_root():
@@ -408,7 +419,7 @@ async def detailed_health():
     """Detailed health check including all services."""
     docker_info = await get_cached_docker_info()
     ollama_available = await get_cached_ollama_availability()
-    
+
     return {
         "status": "healthy",
         "services": {
@@ -428,6 +439,7 @@ async def detailed_health():
 
 from fastapi import WebSocket, WebSocketDisconnect
 
+
 @app.websocket("/api/ws/chat/{user_id}")
 async def websocket_chat(websocket: WebSocket, user_id: int):
     """WebSocket endpoint for real-time chat (future enhancement)."""
@@ -444,6 +456,7 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
 # -------------------------
 # Startup/Shutdown Events
 # -------------------------
+
 
 @app.on_event("startup")
 async def startup_event():

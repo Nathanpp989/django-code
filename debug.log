@@ -163,3 +163,18 @@ WARNING 2026-04-20 18:47:57,995 apps Ollama is not running. LLM features will be
 WARNING 2026-04-20 18:48:41,930 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-20 18:48:41,998 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
 WARNING 2026-04-20 18:48:42,067 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 20:02:44,760 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 20:02:46,315 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-20 20:02:48,252 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:45:03,012 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:46:59,463 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:47:09,530 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:47:18,017 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:48:15,268 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:48:41,383 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:48:41,406 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:48:41,410 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 18:50:12,200 main Docker unavailable from FastAPI: No module named 'docker'
+WARNING 2026-04-22 18:50:12,203 main Docker daemon is not accessible to FastAPI
+WARNING 2026-04-22 18:50:40,776 main Docker unavailable from FastAPI: No module named 'docker'
+WARNING 2026-04-22 18:50:40,778 main Docker daemon is not accessible to FastAPI
