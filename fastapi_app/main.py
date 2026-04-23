@@ -208,13 +208,13 @@ class Metrics:
         self.response_times = []
         self.errors_total = 0
 
-    async def record_request(self, endpoint: str, method: str, response_time: float):
+    def record_request(self, endpoint: str, method: str, response_time: float):
         self.requests_total += 1
         key = f"{method}:{endpoint}"
         self.requests_by_endpoint[key] = self.requests_by_endpoint.get(key, 0) + 1
         self.response_times.append(response_time)
 
-    async def record_error(self):
+    def record_error(self):
         self.errors_total += 1
 
     async def get_stats(self) -> Dict[str, Any]:
@@ -384,6 +384,11 @@ app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 # -------------------------
 # API Endpoints
 # -------------------------
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return {"message": "FastAPI is running", "api": "/api"}
 
 
 @app.get("/api", include_in_schema=False)
