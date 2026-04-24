@@ -178,3 +178,5 @@ WARNING 2026-04-22 18:50:12,200 main Docker unavailable from FastAPI: No module 
 WARNING 2026-04-22 18:50:12,203 main Docker daemon is not accessible to FastAPI
 WARNING 2026-04-22 18:50:40,776 main Docker unavailable from FastAPI: No module named 'docker'
 WARNING 2026-04-22 18:50:40,778 main Docker daemon is not accessible to FastAPI
+WARNING 2026-04-22 19:43:22,348 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-22 19:43:23,964 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
