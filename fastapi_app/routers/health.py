@@ -30,7 +30,7 @@ async def health_check():
         connection.ensure_connection()
         status["database"] = "ok"
     except Exception as e:
-        status["database"] = f"error: {str(e)}"
+        status["database"] = "error"
         logger.error(f"Health check DB error: {e}")
 
     # Check Ollama

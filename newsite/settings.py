@@ -8,12 +8,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(str(BASE_DIR / ".env"))
 
-DEBUG = os.getenv("DEBUG", "True").lower() in ("1", "true", "yes")
+DEBUG = os.getenv("DEBUG", "False").lower() in ("1", "true", "yes")
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
     if DEBUG:
-        SECRET_KEY = secrets.token_urlsafe(50)
+        # In development, use a consistent key from a file to avoid breaking sessions on reload
+        dev_key_file = BASE_DIR / ".dev_secret_key"
+        if dev_key_file.exists():
+            SECRET_KEY = dev_key_file.read_text().strip()
+        else:
+            SECRET_KEY = secrets.token_urlsafe(50)
+            dev_key_file.write_text(SECRET_KEY)
     else:
         raise ValueError("DJANGO_SECRET_KEY must be set in production")
 

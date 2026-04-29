@@ -115,7 +115,7 @@ async def create_conversion(
     user: User = Depends(get_current_user),
 ):
     entry = ConvertLLM.objects.create(
-        new_string=payload.input_string, new_number=len(payload.input_string)
+        new_string=payload.input_string, new_number=len(payload.input_string), created_by=user
     )
     logger.info(f"User {user.username} created ConvertLLM pk={entry.pk}")
     return serialize_convert(entry)
@@ -163,6 +163,13 @@ async def update_conversion(
             detail=f"Conversion {convert_id} not found.",
         )
 
+    # Check ownership
+    if entry.created_by != user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update this entry.",
+        )
+
     entry.new_string = payload.input_string
     entry.new_number = len(payload.input_string)
     entry.save()
@@ -190,6 +197,13 @@ async def delete_conversion(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Conversion {convert_id} not found.",
+        )
+
+    # Check ownership
+    if entry.created_by != user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this entry.",
         )
 
     LLMSummary.objects.filter(content_type="convert", object_id=convert_id).delete()

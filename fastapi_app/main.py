@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 import time
 import asyncio
+import threading
 from collections import deque
 
 from asgiref.sync import sync_to_async
@@ -207,28 +208,32 @@ class Metrics:
         self.requests_by_endpoint = {}
         self.response_times = deque(maxlen=MAX_METRICS_HISTORY)
         self.errors_total = 0
+        self._lock = threading.Lock()
 
     def record_request(self, endpoint: str, method: str, response_time: float):
-        self.requests_total += 1
-        key = f"{method}:{endpoint}"
-        self.requests_by_endpoint[key] = self.requests_by_endpoint.get(key, 0) + 1
-        self.response_times.append(response_time)
+        with self._lock:
+            self.requests_total += 1
+            key = f"{method}:{endpoint}"
+            self.requests_by_endpoint[key] = self.requests_by_endpoint.get(key, 0) + 1
+            self.response_times.append(response_time)
 
     def record_error(self):
-        self.errors_total += 1
+        with self._lock:
+            self.errors_total += 1
 
     async def get_stats(self) -> Dict[str, Any]:
-        avg_response_time = (
-            sum(self.response_times) / len(self.response_times)
-            if self.response_times
-            else 0
-        )
-        return {
-            "requests_total": self.requests_total,
-            "requests_by_endpoint": self.requests_by_endpoint,
-            "avg_response_time": round(avg_response_time, 3),
-            "errors_total": self.errors_total,
-        }
+        with self._lock:
+            avg_response_time = (
+                sum(self.response_times) / len(self.response_times)
+                if self.response_times
+                else 0
+            )
+            return {
+                "requests_total": self.requests_total,
+                "requests_by_endpoint": self.requests_by_endpoint.copy(),
+                "avg_response_time": round(avg_response_time, 3),
+                "errors_total": self.errors_total,
+            }
 
 
 MAX_METRICS_HISTORY = int(os.environ.get("FASTAPI_METRICS_HISTORY", "1000"))

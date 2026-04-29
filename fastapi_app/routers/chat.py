@@ -146,12 +146,6 @@ async def send_chat_message(
     payload: ChatMessageCreate,
     user: User = Depends(get_current_user),
 ):
-    if not OLLAMA_AVAILABLE or mcp_client is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Ollama is not available. Start it with: ollama serve",
-        )
-
     # Save user message
     ChatMessage.objects.create(user=user, role="user", content=payload.message)
 
@@ -168,7 +162,7 @@ async def send_chat_message(
 
     # Initialize the MCP client lazily and then request a response.
     mcp_client_instance = _get_mcp_client()
-    if not OLLAMA_AVAILABLE or mcp_client_instance is None:
+    if mcp_client_instance is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Ollama is not available. Start it with: ollama serve",

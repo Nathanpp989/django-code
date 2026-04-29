@@ -31,7 +31,19 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-mcp_client = MCPOllamaClient()
+# Lazy-load MCP client to reflect configuration changes
+_mcp_client = None
+
+def get_mcp_client():
+    """Get or create the MCP Ollama client."""
+    global _mcp_client
+    if _mcp_client is None:
+        try:
+            _mcp_client = MCPOllamaClient()
+        except Exception as e:
+            logger.warning(f"Failed to initialize MCP client: {e}")
+            return None
+    return _mcp_client
 
 # Security constants
 MAX_CHAT_LENGTH = 2000
@@ -116,7 +128,11 @@ def get_or_create_summary(
         if not MCP_AVAILABLE or not OLLAMA_AVAILABLE:
             return "Summary generation unavailable."
         
-        summary = mcp_client.generate_summary(prompt)
+        client = get_mcp_client()
+        if client is None:
+            return "Summary generation unavailable."
+        
+        summary = client.generate_summary(prompt)
         
         if not summary:
             logger.warning(f"Empty summary returned for content_type={content_type}, object_id={object_id}")
@@ -488,10 +504,14 @@ def chat_message_view(request):
                         "Always be concise and accurate in your responses."
                     )
 
-                    ai_response = mcp_client.chat_with_tools_and_history(
-                        messages=ollama_messages,
-                        system=system_prompt,
-                    )
+                    client = get_mcp_client()
+                    if client is None:
+                        ai_response = "LLM client unavailable. Please try again later."
+                    else:
+                        ai_response = client.chat_with_tools_and_history(
+                            messages=ollama_messages,
+                            system=system_prompt,
+                        )
                     
                     if not ai_response:
                         ai_response = "I encountered an issue generating a response. Please try again."
@@ -1292,10 +1312,14 @@ def chat_message_view(request):
                         "Always be concise and accurate in your responses."
                     )
 
-                    ai_response = mcp_client.chat_with_tools_and_history(
-                        messages=ollama_messages,
-                        system=system_prompt,
-                    )
+                    client = get_mcp_client()
+                    if client is None:
+                        ai_response = "LLM client unavailable. Please try again later."
+                    else:
+                        ai_response = client.chat_with_tools_and_history(
+                            messages=ollama_messages,
+                            system=system_prompt,
+                        )
                     
                     if not ai_response:
                         ai_response = "I encountered an issue generating a response. Please try again."

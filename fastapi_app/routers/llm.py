@@ -113,7 +113,7 @@ async def create_llm_entry(
     payload: NewLLMCreate,
     user: User = Depends(get_current_user),
 ):
-    entry = NewLLM.objects.create(llm_text=payload.llm_text)
+    entry = NewLLM.objects.create(llm_text=payload.llm_text, created_by=user)
 
     if payload.choices:
         for choice_text in payload.choices:
@@ -167,6 +167,13 @@ async def update_llm_entry(
             detail=f"LLM entry {llm_id} not found.",
         )
 
+    # Check ownership
+    if entry.created_by != user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to update this entry.",
+        )
+
     if payload.llm_text:
         entry.llm_text = payload.llm_text
         entry.save()
@@ -191,6 +198,13 @@ async def delete_llm_entry(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"LLM entry {llm_id} not found.",
+        )
+
+    # Check ownership
+    if entry.created_by != user:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this entry.",
         )
 
     LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
