@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 import time
 import asyncio
-from functools import wraps
+from collections import deque
 
 from asgiref.sync import sync_to_async
 from django.core.cache import cache
@@ -205,7 +205,7 @@ class Metrics:
     def __init__(self):
         self.requests_total = 0
         self.requests_by_endpoint = {}
-        self.response_times = []
+        self.response_times = deque(maxlen=MAX_METRICS_HISTORY)
         self.errors_total = 0
 
     def record_request(self, endpoint: str, method: str, response_time: float):
@@ -230,6 +230,8 @@ class Metrics:
             "errors_total": self.errors_total,
         }
 
+
+MAX_METRICS_HISTORY = int(os.environ.get("FASTAPI_METRICS_HISTORY", "1000"))
 
 metrics = Metrics()
 
@@ -283,6 +285,7 @@ app = FastAPI(
     openapi_url=FASTAPI_OPENAPI_URL,
     lifespan=lifespan,
 )
+app.state.limiter = limiter
 
 # -------------------------
 # Exception Handlers

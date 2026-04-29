@@ -9,7 +9,7 @@ This means any user logged into Django is automatically
 authenticated in the FastAPI layer with no separate login needed.
 """
 
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Depends
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.auth.models import User
 import logging
@@ -37,7 +37,8 @@ async def get_current_user(request: Request) -> User:
 
     try:
         session = SessionStore(session_key=session_key)
-        user_id = session.get("_auth_user_id")
+        session_data = session.load()
+        user_id = session_data.get("_auth_user_id")
 
         if not user_id:
             raise HTTPException(
@@ -68,16 +69,11 @@ async def get_current_user(request: Request) -> User:
         )
 
 
-async def get_current_admin_user(
-    user: User = None,
-    request: Request = None
-) -> User:
+async def get_current_admin_user(user: User = Depends(get_current_user)) -> User:
     """
     Dependency that requires the user to be a Django staff member.
     Use for admin-only endpoints.
     """
-    from fastapi import Depends
-    user = await get_current_user(request)
     if not user.is_staff:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

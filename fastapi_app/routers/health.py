@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from django.db import connection
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ async def health_check():
     # Check Ollama
     try:
         import ollama
-        ollama.list()
+        await asyncio.to_thread(ollama.list)
         status["ollama"] = "ok"
     except Exception:
         status["ollama"] = "unavailable"

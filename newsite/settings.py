@@ -198,22 +198,24 @@ AUTH_PASSWORD_VALIDATORS = [
 # -------------------------
 # Cache
 # -------------------------
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
+if os.getenv("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL"),
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "rate_limit_cache",
+        }
+    }
 
-# Fallback to database cache if Redis is not available
-if not os.getenv("REDIS_URL"):
-    CACHES["default"] = {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "rate_limit_cache",
-    }
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
@@ -236,19 +238,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 LOGIN_URL = "/accounts/login/"
-
-# -------------------------
-# Caching
-# -------------------------
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "django-llm-cache",
-        "OPTIONS": {
-            "MAX_ENTRIES": 10000,
-        },
-    }
-}
 
 # -------------------------
 # Session Configuration

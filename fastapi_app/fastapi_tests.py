@@ -8,8 +8,18 @@ Or via Makefile:
     make test-fastapi
 """
 
+import os
+import sys
 import pytest
 import json
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "newsite.settings")
+if os.getcwd() not in sys.path:
+    sys.path.insert(0, os.getcwd())
+
+import django
+django.setup()
+
 from fastapi.testclient import TestClient
 from django.contrib.auth.models import User
 from django.test import TestCase

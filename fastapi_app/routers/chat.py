@@ -10,7 +10,7 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from django.contrib.auth.models import User
-from django.db.models import Count
+from django.db.models import Count, Q
 from typing import List
 import logging
 
@@ -21,7 +21,7 @@ from fastapi_app.schemas import (
     MessageResponse,
     PaginatedResponse,
 )
-from django_llm.models import ChatMessage, ReverseLLM
+from django_llm.models import ChatMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -31,12 +31,33 @@ try:
     from django_llm.mcp_client import MCPOllamaClient, OLLAMA_AVAILABLE
     from django_llm.prompts import CHAT_SYSTEM_PROMPT
 
-    mcp_client = MCPOllamaClient()
+    mcp_client = None
 except Exception as e:
     logger.warning(f"MCP client unavailable: {e}")
     mcp_client = None
     OLLAMA_AVAILABLE = False
     CHAT_SYSTEM_PROMPT = ""
+
+
+def _get_mcp_client():
+    global mcp_client, OLLAMA_AVAILABLE
+
+    if mcp_client is not None:
+        return mcp_client
+
+    try:
+        from django_llm.mcp_client import MCPOllamaClient, OLLAMA_AVAILABLE as available
+        from django_llm.prompts import CHAT_SYSTEM_PROMPT as prompt
+
+        mcp_client = MCPOllamaClient()
+        OLLAMA_AVAILABLE = available
+        globals()["CHAT_SYSTEM_PROMPT"] = prompt
+        return mcp_client
+    except Exception as e:
+        logger.warning(f"Failed to initialize MCP client: {e}")
+        OLLAMA_AVAILABLE = False
+        mcp_client = None
+        return None
 
 
 def serialize_message(msg: ChatMessage) -> dict:
@@ -63,19 +84,15 @@ async def get_chat_stats(
 ):
     stats = ChatMessage.objects.filter(user=user).aggregate(
         total=Count("id"),
-        user_messages=Count(
-            "id", filter=__import__("django.db.models", fromlist=["Q"]).Q(role="user")
-        ),
-        assistant_messages=Count(
-            "id",
-            filter=__import__("django.db.models", fromlist=["Q"]).Q(role="assistant"),
-        ),
+        user_messages=Count("id", filter=Q(role="user")),
+        assistant_messages=Count("id", filter=Q(role="assistant")),
     )
+    mcp_client_instance = _get_mcp_client()
     return {
         "total_messages": stats["total"] or 0,
         "user_messages": stats["user_messages"] or 0,
         "assistant_messages": stats["assistant_messages"] or 0,
-        "ollama_available": OLLAMA_AVAILABLE,
+        "ollama_available": bool(mcp_client_instance),
     }
 
 
@@ -149,9 +166,16 @@ async def send_chat_message(
         {"role": msg["role"], "content": msg["content"]} for msg in history
     ]
 
-    # Get AI response
+    # Initialize the MCP client lazily and then request a response.
+    mcp_client_instance = _get_mcp_client()
+    if not OLLAMA_AVAILABLE or mcp_client_instance is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ollama is not available. Start it with: ollama serve",
+        )
+
     try:
-        ai_response = mcp_client.chat_with_tools_and_history(
+        ai_response = mcp_client_instance.chat_with_tools_and_history(
             messages=ollama_messages,
             system=CHAT_SYSTEM_PROMPT,
         )

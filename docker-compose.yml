@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
+      GUNICORN_BIND: 0.0.0.0:8001
       FASTAPI_DOCKER_HOST: unix:///var/run/docker.sock
       FASTAPI_DOCS_URL: /api/docs
       FASTAPI_REDOC_URL: /api/redoc
