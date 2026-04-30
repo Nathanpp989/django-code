@@ -15,32 +15,39 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional
 import time
-import asyncio
 import threading
 from collections import deque
 
+# Third-party imports (must be at module level)
 from asgiref.sync import sync_to_async
-from django.core.cache import cache
-from django.conf import settings
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+# Local imports (must be before django.setup())
+from fastapi_app.routers import llm, convert, chat, health
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "newsite.settings")
 django.setup()
 
-from fastapi import FastAPI, HTTPException, Request, Response, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-
-from fastapi_app.routers import llm, convert, chat, health
-from fastapi_app.auth import get_current_user
+# Django imports (after django.setup())
+from django.core.cache import cache
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +360,7 @@ async def add_metrics_middleware(request: Request, call_next):
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
 
         return response
-    except Exception as e:
+    except Exception:
         response_time = time.time() - start_time
         await metrics.record_request(request.url.path, request.method, response_time)
         raise
@@ -449,8 +456,6 @@ async def detailed_health():
 # -------------------------
 # WebSocket Support (Optional)
 # -------------------------
-
-from fastapi import WebSocket, WebSocketDisconnect
 
 
 @app.websocket("/api/ws/chat/{user_id}")
