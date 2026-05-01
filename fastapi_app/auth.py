@@ -7,12 +7,21 @@ and returns the authenticated Django user.
 
 This means any user logged into Django is automatically
 authenticated in the FastAPI layer with no separate login needed.
+
+Includes:
+- Session validation
+- Brute force attack detection
+- Audit logging for auth events
 """
 
 from fastapi import Request, HTTPException, status, Depends
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.auth.models import User
 import logging
+
+from fastapi_app.logging_utils import (
+    BruteForceDetector, log_audit_trail, get_client_ip, get_user_agent
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +34,18 @@ async def get_current_user(request: Request) -> User:
         @router.get("/protected")
         async def protected(user: User = Depends(get_current_user)):
             return {"username": user.username}
+    
+    Includes brute force detection for invalid sessions.
     """
     session_key = request.cookies.get("sessionid")
+    client_ip = get_client_ip(request)
+    user_agent = get_user_agent(request)
 
     if not session_key:
+        # Track failed auth attempts
+        await BruteForceDetector.record_failed_attempt(client_ip, "no_session")
+        logger.warning(f"Auth failed: No session key from {client_ip}")
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in via the Django interface.",
@@ -41,6 +58,9 @@ async def get_current_user(request: Request) -> User:
         user_id = session_data.get("_auth_user_id")
 
         if not user_id:
+            await BruteForceDetector.record_failed_attempt(client_ip, "invalid_session")
+            logger.warning(f"Auth failed: Invalid session from {client_ip}")
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session expired or invalid. Please log in again.",
@@ -49,20 +69,55 @@ async def get_current_user(request: Request) -> User:
         user = User.objects.select_related().get(pk=user_id)
 
         if not user.is_active:
+            logger.warning(f"Auth blocked: Inactive user {user.username} from {client_ip}")
+            
+            # Log audit trail for suspicious activity
+            await log_audit_trail(
+                user=user,
+                action="LOGIN",
+                resource_type="Session",
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status="failed",
+            )
+            
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is disabled.",
             )
 
+        # Clear any failed attempts on successful auth
+        await BruteForceDetector.record_success(client_ip, "no_session")
+        await BruteForceDetector.record_success(client_ip, "invalid_session")
+        
+        logger.info(f"Auth success: User {user.username} from {client_ip}")
+        
+        # Log successful session auth
+        await log_audit_trail(
+            user=user,
+            action="LOGIN",
+            resource_type="Session",
+            ip_address=client_ip,
+            user_agent=user_agent,
+            status="success",
+        )
+        
         return user
 
     except User.DoesNotExist:
+        await BruteForceDetector.record_failed_attempt(client_ip, "user_not_found")
+        logger.warning(f"Auth failed: User not found, session {session_key[:8]}... from {client_ip}")
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found. Please log in again.",
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Session auth error: {e}")
+        await BruteForceDetector.record_failed_attempt(client_ip, "auth_error")
+        logger.error(f"Session auth error from {client_ip}: {e}", exc_info=True)
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed.",

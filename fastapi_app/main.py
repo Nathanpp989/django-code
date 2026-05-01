@@ -39,6 +39,9 @@ from slowapi.middleware import SlowAPIMiddleware
 
 # Local imports (must be before django.setup())
 from fastapi_app.routers import llm, convert, chat, health
+from fastapi_app.logging_utils import (
+    generate_request_id, get_structured_logger, get_client_ip, RequestTimer
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -50,6 +53,7 @@ from django.core.cache import cache
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+structured_logger = get_structured_logger(__name__)
 
 # -------------------------
 # Rate Limiting
@@ -306,34 +310,80 @@ app.state.limiter = limiter
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     await metrics.record_error()
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    logger.warning(
+        f"HTTP Exception: {exc.status_code}",
+        extra={
+            "request_id": request_id,
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+        }
+    )
+    
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail, "type": "http_exception"},
+        content={"detail": exc.detail, "type": "http_exception", "request_id": request_id},
     )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     await metrics.record_error()
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    
+    logger.warning(
+        f"Validation Error: {len(exc.errors())} error(s)",
+        extra={
+            "request_id": request_id,
+            "error_count": len(exc.errors()),
+            "errors": str(exc.errors())[:200],  # Truncate for logging
+        }
+    )
+    
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors(), "type": "validation_error"},
+        content={"detail": exc.errors(), "type": "validation_error", "request_id": request_id},
     )
 
 
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     await metrics.record_error()
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    client_ip = get_client_ip(request)
+    
+    logger.warning(
+        f"Rate limit exceeded",
+        extra={
+            "request_id": request_id,
+            "client_ip": client_ip,
+            "limit_detail": str(exc),
+        }
+    )
+    
     return JSONResponse(
         status_code=429,
-        content={"detail": "Rate limit exceeded", "type": "rate_limit"},
+        content={"detail": "Rate limit exceeded", "type": "rate_limit", "request_id": request_id},
     )
 
 
 async def general_exception_handler(request: Request, exc: Exception):
     await metrics.record_error()
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    request_id = getattr(request.state, 'request_id', 'unknown')
+    client_ip = get_client_ip(request)
+    
+    logger.error(
+        f"Unhandled exception",
+        extra={
+            "request_id": request_id,
+            "client_ip": client_ip,
+            "error_type": type(exc).__name__,
+        },
+        exc_info=True
+    )
+    
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": "server_error"},
+        content={"detail": "Internal server error", "type": "server_error", "request_id": request_id},
     )
 
 
@@ -349,6 +399,12 @@ app.add_exception_handler(Exception, general_exception_handler)
 
 async def add_metrics_middleware(request: Request, call_next):
     start_time = time.time()
+    request_id = generate_request_id()
+    request.state.request_id = request_id
+    
+    # Set up request context
+    client_ip = get_client_ip(request)
+    structured_logger.set_request_context(request_id, ip_address=client_ip)
 
     try:
         response = await call_next(request)
@@ -356,13 +412,40 @@ async def add_metrics_middleware(request: Request, call_next):
 
         await metrics.record_request(request.url.path, request.method, response_time)
 
-        # Add response time header
+        # Add response time header and request ID
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
+        response.headers["X-Request-ID"] = request_id
+
+        # Log request
+        logger.info(
+            f"{request.method} {request.url.path} - {response.status_code}",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "response_time_ms": f"{response_time * 1000:.2f}",
+                "client_ip": client_ip,
+            }
+        )
 
         return response
-    except Exception:
+    except Exception as e:
         response_time = time.time() - start_time
         await metrics.record_request(request.url.path, request.method, response_time)
+        
+        logger.error(
+            f"{request.method} {request.url.path} - Exception",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "error": str(e),
+                "response_time_ms": f"{response_time * 1000:.2f}",
+                "client_ip": client_ip,
+            },
+            exc_info=True
+        )
         raise
 
 

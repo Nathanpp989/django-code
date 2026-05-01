@@ -13,7 +13,7 @@ Endpoints:
     DELETE /api/llm/{id}/choices/{choice_id} - Delete a choice
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from django.contrib.auth.models import User
 from django.db.models import Sum, F
 from django.db import transaction
@@ -21,6 +21,9 @@ from typing import List, Optional
 import logging
 
 from fastapi_app.auth import get_current_user
+from fastapi_app.logging_utils import (
+    log_audit_trail, log_user_activity, get_client_ip, get_user_agent
+)
 from fastapi_app.schemas import (
     NewLLMResponse,
     NewLLMDetailResponse,
@@ -111,17 +114,43 @@ async def list_llm_entries(
 )
 async def create_llm_entry(
     payload: NewLLMCreate,
+    request: Request,
     user: User = Depends(get_current_user),
 ):
     entry = NewLLM.objects.create(llm_text=payload.llm_text, created_by=user)
-
+    
+    choice_count = 0
     if payload.choices:
         for choice_text in payload.choices:
             choice_text = choice_text.strip()
             if choice_text:
                 LLMChoice.objects.create(new_llm=entry, choice_text=choice_text)
+                choice_count += 1
 
-    logger.info(f"User {user.username} created NewLLM pk={entry.pk}")
+    logger.info(
+        f"User {user.username} created NewLLM pk={entry.pk} with {choice_count} choices",
+        extra={"user_id": user.id, "llm_id": entry.pk}
+    )
+    
+    # Log audit trail for create
+    await log_audit_trail(
+        user=user,
+        action="CREATE",
+        resource_type="NewLLM",
+        resource_id=entry.pk,
+        changes={"text_length": len(payload.llm_text), "choice_count": choice_count},
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        status="success",
+    )
+    
+    # Log user activity
+    await log_user_activity(
+        user,
+        "create_llm",
+        {"llm_id": entry.pk, "choice_count": choice_count}
+    )
+    
     return serialize_llm(entry, include_choices=True)
 
 
@@ -157,6 +186,7 @@ async def get_llm_entry(
 async def update_llm_entry(
     llm_id: int,
     payload: NewLLMUpdate,
+    request: Request,
     user: User = Depends(get_current_user),
 ):
     try:
@@ -169,16 +199,42 @@ async def update_llm_entry(
 
     # Check ownership
     if entry.created_by != user:
+        logger.warning(
+            f"Unauthorized update attempt: user={user.username}, llm_id={llm_id}",
+            extra={"user_id": user.id, "llm_id": llm_id}
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this entry.",
         )
 
+    old_text = entry.llm_text if payload.llm_text else None
+    
     if payload.llm_text:
         entry.llm_text = payload.llm_text
         entry.save()
 
-    logger.info(f"User {user.username} updated NewLLM pk={llm_id}")
+    logger.info(
+        f"User {user.username} updated NewLLM pk={llm_id}",
+        extra={"user_id": user.id, "llm_id": llm_id}
+    )
+    
+    # Log audit trail for update
+    await log_audit_trail(
+        user=user,
+        action="UPDATE",
+        resource_type="NewLLM",
+        resource_id=llm_id,
+        changes={
+            "old_text_length": len(old_text) if old_text else None,
+            "new_text_length": len(payload.llm_text) if payload.llm_text else None,
+        },
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        status="success",
+    )
+    
     return serialize_llm(entry, include_choices=True)
 
 
@@ -190,6 +246,7 @@ async def update_llm_entry(
 )
 async def delete_llm_entry(
     llm_id: int,
+    request: Request,
     user: User = Depends(get_current_user),
 ):
     try:
@@ -202,14 +259,44 @@ async def delete_llm_entry(
 
     # Check ownership
     if entry.created_by != user:
+        logger.warning(
+            f"Unauthorized delete attempt: user={user.username}, llm_id={llm_id}",
+            extra={"user_id": user.id, "llm_id": llm_id}
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this entry.",
         )
 
+    # Store deletion info for audit log
+    deleted_llm_text = entry.llm_text
+    choice_count = entry.choices.count()
+    summary_count = LLMSummary.objects.filter(content_type="results", object_id=llm_id).count()
+
     LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
     entry.delete()
-    logger.info(f"User {user.username} deleted NewLLM pk={llm_id}")
+    
+    logger.warning(
+        f"User {user.username} deleted NewLLM pk={llm_id}",
+        extra={"user_id": user.id, "llm_id": llm_id}
+    )
+    
+    # Log audit trail for delete (compliance record)
+    await log_audit_trail(
+        user=user,
+        action="DELETE",
+        resource_type="NewLLM",
+        resource_id=llm_id,
+        changes={
+            "text_length": len(deleted_llm_text),
+            "choice_count": choice_count,
+            "summary_count": summary_count,
+        },
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        status="success",
+    )
 
 
 # -------------------------

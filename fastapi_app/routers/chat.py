@@ -8,13 +8,16 @@ Endpoints:
     GET    /api/chat/stats     - Get chat statistics
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from django.contrib.auth.models import User
 from django.db.models import Count, Q
 from typing import List
 import logging
 
 from fastapi_app.auth import get_current_user
+from fastapi_app.logging_utils import (
+    log_audit_trail, log_user_activity, get_client_ip, get_user_agent
+)
 from fastapi_app.schemas import (
     ChatMessageResponse,
     ChatMessageCreate,
@@ -144,10 +147,23 @@ async def get_chat_history(
 )
 async def send_chat_message(
     payload: ChatMessageCreate,
+    request: Request,
     user: User = Depends(get_current_user),
 ):
+    # Log user activity
+    await log_user_activity(
+        user,
+        "chat_message",
+        {"message_length": len(payload.message)}
+    )
+    
     # Save user message
-    ChatMessage.objects.create(user=user, role="user", content=payload.message)
+    user_msg = ChatMessage.objects.create(user=user, role="user", content=payload.message)
+    
+    logger.info(
+        f"Chat message created: user={user.username}, msg_id={user_msg.id}, length={len(payload.message)}",
+        extra={"user_id": user.id, "message_id": user_msg.id}
+    )
 
     # Build conversation history
     history = (
@@ -163,6 +179,17 @@ async def send_chat_message(
     # Initialize the MCP client lazily and then request a response.
     mcp_client_instance = _get_mcp_client()
     if mcp_client_instance is None:
+        # Log audit trail for failed chat (service unavailable)
+        await log_audit_trail(
+            user=user,
+            action="CHAT",
+            resource_type="ChatMessage",
+            resource_id=user_msg.id,
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
+            status="failed",
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Ollama is not available. Start it with: ollama serve",
@@ -174,7 +201,20 @@ async def send_chat_message(
             system=CHAT_SYSTEM_PROMPT,
         )
     except Exception as e:
-        logger.error(f"Chat API error for user {user.username}: {e}")
+        logger.error(f"Chat API error for user {user.username}: {e}", exc_info=True)
+        
+        # Log audit trail for failed chat
+        await log_audit_trail(
+            user=user,
+            action="CHAT",
+            resource_type="ChatMessage",
+            resource_id=user_msg.id,
+            changes={"error": str(e)},
+            ip_address=get_client_ip(request),
+            user_agent=get_user_agent(request),
+            status="failed",
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"LLM error: {str(e)}",
@@ -183,6 +223,26 @@ async def send_chat_message(
     # Save AI response
     ai_message = ChatMessage.objects.create(
         user=user, role="assistant", content=ai_response
+    )
+    
+    logger.info(
+        f"Chat response created: user={user.username}, msg_id={ai_message.id}",
+        extra={"user_id": user.id, "message_id": ai_message.id}
+    )
+    
+    # Log successful chat to audit trail
+    await log_audit_trail(
+        user=user,
+        action="CHAT",
+        resource_type="ChatMessage",
+        resource_id=ai_message.id,
+        changes={
+            "user_message_length": len(payload.message),
+            "ai_response_length": len(ai_response),
+        },
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        status="success",
     )
 
     return {
@@ -204,8 +264,35 @@ async def send_chat_message(
     description="Deletes all chat messages for the current user.",
 )
 async def clear_chat_history(
+    request: Request,
     user: User = Depends(get_current_user),
 ):
+    # Log activity before deletion
+    message_count = ChatMessage.objects.filter(user=user).count()
+    
+    await log_user_activity(
+        user,
+        "export",  # Reusing "export" activity type for data deletion
+        {"message_count": message_count}
+    )
+    
+    # Delete messages
     deleted_count, _ = ChatMessage.objects.filter(user=user).delete()
-    logger.info(f"API cleared {deleted_count} messages for user {user.username}")
+    
+    logger.warning(
+        f"User deleted {deleted_count} chat messages: user={user.username}",
+        extra={"user_id": user.id, "deleted_count": deleted_count}
+    )
+    
+    # Log audit trail for deletion (compliance)
+    await log_audit_trail(
+        user=user,
+        action="DELETE",
+        resource_type="ChatMessage",
+        changes={"deleted_count": deleted_count},
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+        status="success",
+    )
+    
     return {"message": f"Cleared {deleted_count} messages.", "status": "success"}
