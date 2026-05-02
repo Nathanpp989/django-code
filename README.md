@@ -27,11 +27,18 @@
 
    python manage.py runserver 0.0.0.0:8000
 
-6. If you need the ASGI/FastAPI stack, start uvicorn:
+6. Start the FastAPI process for API traffic:
+
+   gunicorn -c newsite/gunicorn_conf.py fastapi_app.main:app
+
+   # Or for local development:
+   uvicorn fastapi_app.main:app --host 0.0.0.0 --port 8001 --reload
+
+7. If you need the ASGI/FastAPI stack via Django ASGI directly, use:
 
    uvicorn newsite.asgi:application --host 0.0.0.0 --port 8000 --reload
 
-7. To start Gunicorn in the foreground:
+8. To start Gunicorn in the foreground:
 
    gunicorn --chdir /workspaces/Django_code/newDjango --workers 3 --bind unix:/workspaces/Django_code/newDjango/gunicorn.sock newsite.wsgi:application
 
@@ -65,6 +72,7 @@
 - `python-dotenv` loads environment variables from `.env`; keep secrets out of source control.
 - `django-redis` / `redis` support is included, so install/start a local Redis instance if you use caching.
 - FastAPI / uvicorn are included for ASGI endpoints and async HTTP handling.
+- NGINX should proxy `/api` and `/api/*` to the FastAPI server on port `8001`, while routing HTML and Django pages to the Django Gunicorn backend on port `8000`.
 - `ollama` and `mcp` are included for LLM / MCP integrations; check your app configuration for usage details.
 - Always run migrations after model changes:
 

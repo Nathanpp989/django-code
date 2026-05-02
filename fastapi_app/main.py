@@ -27,6 +27,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from django.contrib.sessions.backends.db import SessionStore
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -51,6 +52,7 @@ django.setup()
 # Django imports (after django.setup())
 from django.core.cache import cache
 from django.conf import settings
+from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
 structured_logger = get_structured_logger(__name__)
@@ -88,9 +90,10 @@ FASTAPI_DESCRIPTION = os.environ.get(
     ),
 )
 FASTAPI_VERSION = os.environ.get("FASTAPI_VERSION", "1.0.0")
-FASTAPI_DOCS_URL = os.environ.get("FASTAPI_DOCS_URL", "/api/docs")
-FASTAPI_REDOC_URL = os.environ.get("FASTAPI_REDOC_URL", "/api/redoc")
-FASTAPI_OPENAPI_URL = os.environ.get("FASTAPI_OPENAPI_URL", "/api/openapi.json")
+# Hide docs in production for security
+FASTAPI_DOCS_URL = os.environ.get("FASTAPI_DOCS_URL", "/api/docs" if settings.DEBUG else None)
+FASTAPI_REDOC_URL = os.environ.get("FASTAPI_REDOC_URL", "/api/redoc" if settings.DEBUG else None)
+FASTAPI_OPENAPI_URL = os.environ.get("FASTAPI_OPENAPI_URL", "/api/openapi.json" if settings.DEBUG else None)
 
 FASTAPI_CORS_ALLOW_ORIGINS = parse_env_list(
     os.environ.get("FASTAPI_CORS_ALLOW_ORIGINS"),
@@ -543,15 +546,47 @@ async def detailed_health():
 
 @app.websocket("/api/ws/chat/{user_id}")
 async def websocket_chat(websocket: WebSocket, user_id: int):
-    """WebSocket endpoint for real-time chat (future enhancement)."""
-    await websocket.accept()
+    """WebSocket endpoint for real-time chat with session-based authentication."""
+    # Validate Django session before accepting WebSocket connection
     try:
-        while True:
-            data = await websocket.receive_text()
-            # Process real-time chat messages
-            await websocket.send_text(f"Echo: {data}")
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for user {user_id}")
+        session_key = websocket.cookies.get("sessionid")
+        if not session_key:
+            await websocket.close(code=4001, reason="Unauthorized: No session")
+            return
+
+        session = SessionStore(session_key=session_key)
+        session_data = session.load()
+        auth_user_id = session_data.get("_auth_user_id")
+
+        if not auth_user_id or int(auth_user_id) != user_id:
+            # Prevent users from connecting to other users' WebSockets
+            await websocket.close(code=4003, reason="Unauthorized: User mismatch")
+            logger.warning(
+                f"WebSocket auth failed: requested {user_id}, authenticated {auth_user_id}"
+            )
+            return
+
+        user = await sync_to_async(User.objects.get)(pk=auth_user_id)
+        if not user.is_active:
+            await websocket.close(code=4003, reason="Unauthorized: Account disabled")
+            return
+
+        await websocket.accept()
+        logger.info(f"WebSocket connected for user {user_id}")
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                # Process real-time chat messages
+                await websocket.send_text(f"Echo: {data}")
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for user {user_id}")
+    except Exception as e:
+        logger.error(f"WebSocket auth error: {e}", exc_info=True)
+        try:
+            await websocket.close(code=4000, reason="Internal server error")
+        except Exception:
+            pass
 
 
 # -------------------------

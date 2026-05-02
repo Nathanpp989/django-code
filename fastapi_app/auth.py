@@ -41,9 +41,17 @@ async def get_current_user(request: Request) -> User:
     client_ip = get_client_ip(request)
     user_agent = get_user_agent(request)
 
+    if await BruteForceDetector.is_locked_out(client_ip, "auth"):
+        logger.warning(f"Auth blocked: too many failed attempts from {client_ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed authentication attempts. Please try again later.",
+            headers={"Retry-After": str(BruteForceDetector.LOCKOUT_DURATION)},
+        )
+
     if not session_key:
         # Track failed auth attempts
-        await BruteForceDetector.record_failed_attempt(client_ip, "no_session")
+        await BruteForceDetector.record_failed_attempt(client_ip, "auth")
         logger.warning(f"Auth failed: No session key from {client_ip}")
         
         raise HTTPException(
@@ -58,7 +66,7 @@ async def get_current_user(request: Request) -> User:
         user_id = session_data.get("_auth_user_id")
 
         if not user_id:
-            await BruteForceDetector.record_failed_attempt(client_ip, "invalid_session")
+            await BruteForceDetector.record_failed_attempt(client_ip, "auth")
             logger.warning(f"Auth failed: Invalid session from {client_ip}")
             
             raise HTTPException(
@@ -69,6 +77,7 @@ async def get_current_user(request: Request) -> User:
         user = User.objects.select_related().get(pk=user_id)
 
         if not user.is_active:
+            await BruteForceDetector.record_failed_attempt(client_ip, "auth")
             logger.warning(f"Auth blocked: Inactive user {user.username} from {client_ip}")
             
             # Log audit trail for suspicious activity
@@ -87,8 +96,7 @@ async def get_current_user(request: Request) -> User:
             )
 
         # Clear any failed attempts on successful auth
-        await BruteForceDetector.record_success(client_ip, "no_session")
-        await BruteForceDetector.record_success(client_ip, "invalid_session")
+        await BruteForceDetector.record_success(client_ip, "auth")
         
         logger.info(f"Auth success: User {user.username} from {client_ip}")
         
@@ -105,7 +113,7 @@ async def get_current_user(request: Request) -> User:
         return user
 
     except User.DoesNotExist:
-        await BruteForceDetector.record_failed_attempt(client_ip, "user_not_found")
+        await BruteForceDetector.record_failed_attempt(client_ip, "auth")
         logger.warning(f"Auth failed: User not found, session {session_key[:8]}... from {client_ip}")
         
         raise HTTPException(
@@ -115,7 +123,7 @@ async def get_current_user(request: Request) -> User:
     except HTTPException:
         raise
     except Exception as e:
-        await BruteForceDetector.record_failed_attempt(client_ip, "auth_error")
+        await BruteForceDetector.record_failed_attempt(client_ip, "auth")
         logger.error(f"Session auth error from {client_ip}: {e}", exc_info=True)
         
         raise HTTPException(

@@ -76,6 +76,8 @@ SECURE_HSTS_PRELOAD = not DEBUG
 SESSION_COOKIE_AGE = 1209600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = False
+SESSION_COOKIE_SAMESITE = "Strict"  # Prevent CSRF attacks via cross-site requests
+CSRF_COOKIE_SAMESITE = "Strict"  # Strict SameSite for CSRF protection
 
 # Additional security settings
 SECURE_BROWSER_XSS_FILTER = True

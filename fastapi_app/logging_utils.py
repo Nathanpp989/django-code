@@ -93,7 +93,7 @@ class BruteForceDetector:
         return f"brute_force:{attempt_type}:{identifier}"
 
     @staticmethod
-    async def record_failed_attempt(identifier: str, attempt_type: str = "login") -> Dict[str, Any]:
+    async def record_failed_attempt(identifier: str, attempt_type: str = "auth") -> Dict[str, Any]:
         """Record a failed auth attempt and check if user should be locked out."""
         cache_key = BruteForceDetector._get_cache_key(identifier, attempt_type)
         
@@ -109,18 +109,23 @@ class BruteForceDetector:
                     "locked_until": locked_until,
                     "attempts": attempt_data["attempts"]
                 }
-        
+
         # Increment attempts
         attempt_data["attempts"] += 1
         
         # Check if should be locked out
         if attempt_data["attempts"] >= BruteForceDetector.MAX_ATTEMPTS:
-            attempt_data["locked_until"] = (
-                datetime.now() + timedelta(seconds=BruteForceDetector.LOCKOUT_DURATION)
-            ).isoformat()
+            locked_until_dt = datetime.now() + timedelta(seconds=BruteForceDetector.LOCKOUT_DURATION)
+            attempt_data["locked_until"] = locked_until_dt.isoformat()
+            timeout = max(
+                BruteForceDetector.ATTEMPT_WINDOW,
+                int((locked_until_dt - datetime.now()).total_seconds()) + 1,
+            )
+        else:
+            timeout = BruteForceDetector.ATTEMPT_WINDOW
         
         # Update cache
-        cache.set(cache_key, attempt_data, BruteForceDetector.ATTEMPT_WINDOW)
+        cache.set(cache_key, attempt_data, timeout)
         
         return {
             "locked": attempt_data["attempts"] >= BruteForceDetector.MAX_ATTEMPTS,
@@ -129,13 +134,13 @@ class BruteForceDetector:
         }
 
     @staticmethod
-    async def record_success(identifier: str, attempt_type: str = "login"):
+    async def record_success(identifier: str, attempt_type: str = "auth"):
         """Clear failed attempts on successful auth."""
         cache_key = BruteForceDetector._get_cache_key(identifier, attempt_type)
         cache.delete(cache_key)
 
     @staticmethod
-    async def is_locked_out(identifier: str, attempt_type: str = "login") -> bool:
+    async def is_locked_out(identifier: str, attempt_type: str = "auth") -> bool:
         """Check if identifier is currently locked out."""
         cache_key = BruteForceDetector._get_cache_key(identifier, attempt_type)
         attempt_data = cache.get(cache_key, {})
