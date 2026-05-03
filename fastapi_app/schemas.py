@@ -6,11 +6,9 @@ These define the shape of data going in and out of the API.
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
+import re
+import html
 
-
-# -------------------------
-# LLM Entry Schemas
-# -------------------------
 
 class LLMChoiceResponse(BaseModel):
     id: int
@@ -52,14 +50,31 @@ class NewLLMCreate(BaseModel):
         description="Optional list of choice texts"
     )
 
+    @validator('llm_text')
+    def sanitize_llm_text(cls, v):
+        if not v or not v.strip():
+            raise ValueError("LLM text cannot be empty")
+        # HTML escape and strip excessive whitespace
+        sanitized = html.escape(v.strip())
+        # Remove potential script injection attempts
+        sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+        return sanitized[:200]  # Enforce max length
+
     @validator('choices')
     def validate_choices(cls, v):
         if v:
+            sanitized_choices = []
             for choice in v:
-                if len(choice.strip()) == 0:
+                choice = choice.strip()
+                if len(choice) == 0:
                     raise ValueError("Choice text cannot be empty")
                 if len(choice) > 200:
                     raise ValueError("Choice text cannot exceed 200 characters")
+                # Sanitize each choice
+                sanitized = html.escape(choice)
+                sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+                sanitized_choices.append(sanitized[:200])
+            return sanitized_choices
         return v
 
 
@@ -68,11 +83,33 @@ class NewLLMUpdate(BaseModel):
         None, min_length=1, max_length=200
     )
 
+    @validator('llm_text')
+    def sanitize_llm_text(cls, v):
+        if v is not None:
+            if not v or not v.strip():
+                raise ValueError("LLM text cannot be empty")
+            # HTML escape and strip excessive whitespace
+            sanitized = html.escape(v.strip())
+            # Remove potential script injection attempts
+            sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+            return sanitized[:200]  # Enforce max length
+        return v
+
 
 class LLMChoiceCreate(BaseModel):
     choice_text: str = Field(
         ..., min_length=1, max_length=200
     )
+
+    @validator('choice_text')
+    def sanitize_choice_text(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Choice text cannot be empty")
+        # HTML escape and strip excessive whitespace
+        sanitized = html.escape(v.strip())
+        # Remove potential script injection attempts
+        sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+        return sanitized[:200]  # Enforce max length
 
 
 class VoteRequest(BaseModel):

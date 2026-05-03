@@ -88,7 +88,7 @@ async def list_llm_entries(
     search: Optional[str] = Query(None, description="Filter by text"),
     user: User = Depends(get_current_user),
 ):
-    queryset = NewLLM.objects.order_by("-llm_date_used")
+    queryset = NewLLM.objects.prefetch_related('choices').order_by("-llm_date_used")
 
     if search:
         queryset = queryset.filter(llm_text__icontains=search)

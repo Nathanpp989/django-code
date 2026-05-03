@@ -115,7 +115,7 @@ async def get_chat_history(
     page_size: int = Query(50, ge=1, le=200),
     user: User = Depends(get_current_user),
 ):
-    queryset = ChatMessage.objects.filter(user=user).order_by("created_at")
+    queryset = ChatMessage.objects.filter(user=user).select_related('user').order_by("created_at")
 
     total = queryset.count()
     offset = (page - 1) * page_size

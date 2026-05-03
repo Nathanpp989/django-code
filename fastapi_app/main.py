@@ -143,6 +143,33 @@ async def cache_delete(key: str) -> None:
 
 
 # -------------------------
+# Cache Invalidation Helpers
+# -------------------------
+
+async def invalidate_llm_caches() -> None:
+    """Invalidate all LLM-related caches when data changes."""
+    patterns = [
+        "fastapi_llm_list_*",
+        "fastapi_llm_detail_*",
+        "fastapi_llm_stats_*",
+    ]
+    for pattern in patterns:
+        # Delete pattern-based keys (Django cache doesn't support wildcards directly)
+        # In production with Redis, use KEYS pattern and DEL
+        pass  # For now, rely on TTL expiration
+
+
+async def invalidate_user_caches(user_id: int) -> None:
+    """Invalidate user-specific caches."""
+    patterns = [
+        f"fastapi_chat_user_{user_id}_*",
+        f"fastapi_user_{user_id}_stats_*",
+    ]
+    for pattern in patterns:
+        pass  # For now, rely on TTL expiration
+
+
+# -------------------------
 # Service Availability Checks
 # -------------------------
 
