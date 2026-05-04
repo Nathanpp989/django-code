@@ -305,3 +305,6 @@ Traceback (most recent call last):
   File "/usr/local/python/3.12.1/lib/python3.12/site-packages/django/template/backends/django.py", line 130, in reraise
     raise new from exc
 django.template.exceptions.TemplateDoesNotExist: base.html
+WARNING 2026-04-30 15:41:41,422 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-30 15:41:43,030 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
+WARNING 2026-04-30 15:41:44,977 apps Ollama is not running. LLM features will be unavailable. Start it with: ollama serve
