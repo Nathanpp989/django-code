@@ -14,6 +14,7 @@ Includes:
 - Audit logging for auth events
 """
 
+from asgiref.sync import sync_to_async
 from fastapi import Request, HTTPException, status, Depends
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.auth.models import User
@@ -62,7 +63,7 @@ async def get_current_user(request: Request) -> User:
 
     try:
         session = SessionStore(session_key=session_key)
-        session_data = session.load()
+        session_data = await sync_to_async(session.load, thread_sensitive=True)()
         user_id = session_data.get("_auth_user_id")
 
         if not user_id:
@@ -74,7 +75,7 @@ async def get_current_user(request: Request) -> User:
                 detail="Session expired or invalid. Please log in again.",
             )
 
-        user = User.objects.select_related().get(pk=user_id)
+        user = await sync_to_async(User.objects.select_related().get, thread_sensitive=True)(pk=user_id)
 
         if not user.is_active:
             await BruteForceDetector.record_failed_attempt(client_ip, "auth")

@@ -5,16 +5,26 @@ Run with: python -m pytest fastapi_app/tests.py -v
 
 import os
 import django
+import tempfile
+import uuid
 from django.conf import settings
 
 # Configure Django settings for tests
 if not settings.configured:
+    temp_db_path = os.path.join(
+        tempfile.gettempdir(),
+        f"django_fastapi_test_{uuid.uuid4().hex}.sqlite3"
+    )
+
     settings.configure(
         DEBUG=True,
         DATABASES={
             'default': {
                 'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': ':memory:',
+                'NAME': temp_db_path,
+                'OPTIONS': {
+                    'timeout': 20,
+                },
             }
         },
         INSTALLED_APPS=[
@@ -35,19 +45,21 @@ if not settings.configured:
     django.setup()
 
 import pytest
-from django.test import TestCase
+from django.test import TransactionTestCase, TestCase
 from django.contrib.auth.models import User
 from django.test.client import Client
+from django.core.cache import cache
 from fastapi.testclient import TestClient
 from fastapi_app.main import app
 from fastapi_app.auth import get_current_user
 from unittest.mock import Mock, patch
 
 
-class FastAPIAuthTests(TestCase):
+class FastAPIAuthTests(TransactionTestCase):
     """Test FastAPI authentication integration."""
 
     def setUp(self):
+        cache.clear()
         self.client = Client()
         self.fastapi_client = TestClient(app)
         self.user = User.objects.create_user(
@@ -65,22 +77,22 @@ class FastAPIAuthTests(TestCase):
         session_cookie = self.client.cookies.get('sessionid')
         self.assertIsNotNone(session_cookie)
 
-        # Test FastAPI endpoint with session cookie
+        # Test FastAPI auth endpoint with session cookie
         response = self.fastapi_client.get(
-            '/api/health',
+            '/api/auth/verify',
             cookies={'sessionid': session_cookie.value}
         )
         self.assertEqual(response.status_code, 200)
 
     def test_session_auth_failure_no_session(self):
         """Test that requests without session are rejected."""
-        response = self.fastapi_client.get('/api/health')
+        response = self.fastapi_client.get('/api/auth/verify')
         self.assertEqual(response.status_code, 401)
 
     def test_session_auth_failure_invalid_session(self):
         """Test that invalid sessions are rejected."""
         response = self.fastapi_client.get(
-            '/api/health',
+            '/api/auth/verify',
             cookies={'sessionid': 'invalid_session_id'}
         )
         self.assertEqual(response.status_code, 401)
@@ -90,7 +102,7 @@ class FastAPIAuthTests(TestCase):
         # Make multiple failed auth attempts
         for _ in range(6):  # More than BRUTE_FORCE_THRESHOLD
             response = self.fastapi_client.get(
-                '/api/health',
+                '/api/auth/verify',
                 cookies={'sessionid': 'invalid_session_id'}
             )
             if response.status_code == 429:
@@ -98,16 +110,17 @@ class FastAPIAuthTests(TestCase):
 
         # Should eventually get rate limited
         response = self.fastapi_client.get(
-            '/api/health',
+            '/api/auth/verify',
             cookies={'sessionid': 'invalid_session_id'}
         )
         self.assertEqual(response.status_code, 429)
 
 
-class FastAPIRouterTests(TestCase):
+class FastAPIRouterTests(TransactionTestCase):
     """Test FastAPI router functionality."""
 
     def setUp(self):
+        cache.clear()
         self.client = Client()
         self.fastapi_client = TestClient(app)
         self.user = User.objects.create_user(

@@ -27,7 +27,7 @@ async def health_check():
 
     # Check database
     try:
-        connection.ensure_connection()
+        await asyncio.to_thread(connection.ensure_connection)
         status["database"] = "ok"
     except Exception as e:
         status["database"] = "error"

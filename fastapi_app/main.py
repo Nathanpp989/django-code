@@ -26,6 +26,7 @@ from fastapi import (
     Request,
     WebSocket,
     WebSocketDisconnect,
+    Depends,
 )
 from django.contrib.sessions.backends.db import SessionStore
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +54,7 @@ django.setup()
 from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth.models import User
+from fastapi_app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 structured_logger = get_structured_logger(__name__)
@@ -142,6 +144,35 @@ async def cache_delete(key: str) -> None:
     await sync_to_async(cache.delete)(key)
 
 
+async def cache_delete_pattern(pattern: str) -> None:
+    """Delete cache entries by pattern for Redis-like backends."""
+    if hasattr(cache, "delete_pattern"):
+        await sync_to_async(cache.delete_pattern)(pattern)
+        return
+
+    try:
+        client = getattr(cache, "client", None)
+        raw_client = None
+
+        if client is not None and hasattr(client, "get_client"):
+            raw_client = client.get_client(write=True)
+        elif hasattr(cache, "raw_client"):
+            raw_client = cache.raw_client
+
+        if raw_client is not None and hasattr(raw_client, "keys"):
+            keys = await sync_to_async(raw_client.keys)(pattern)
+            if keys:
+                await sync_to_async(raw_client.delete)(*keys)
+                return
+    except Exception as exc:
+        logger.warning("Pattern cache deletion fallback failed: %s", exc)
+
+    logger.warning(
+        "Cache backend does not support pattern deletes. Consider using django-redis for wildcard invalidation: %s",
+        pattern,
+    )
+
+
 # -------------------------
 # Cache Invalidation Helpers
 # -------------------------
@@ -154,9 +185,7 @@ async def invalidate_llm_caches() -> None:
         "fastapi_llm_stats_*",
     ]
     for pattern in patterns:
-        # Delete pattern-based keys (Django cache doesn't support wildcards directly)
-        # In production with Redis, use KEYS pattern and DEL
-        pass  # For now, rely on TTL expiration
+        await cache_delete_pattern(pattern)
 
 
 async def invalidate_user_caches(user_id: int) -> None:
@@ -166,7 +195,7 @@ async def invalidate_user_caches(user_id: int) -> None:
         f"fastapi_user_{user_id}_stats_*",
     ]
     for pattern in patterns:
-        pass  # For now, rely on TTL expiration
+        await cache_delete_pattern(pattern)
 
 
 # -------------------------
@@ -339,7 +368,7 @@ app.state.limiter = limiter
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-    await metrics.record_error()
+    metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     logger.warning(
@@ -358,7 +387,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    await metrics.record_error()
+    metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
     
     logger.warning(
@@ -377,7 +406,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    await metrics.record_error()
+    metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
     client_ip = get_client_ip(request)
     
@@ -440,7 +469,7 @@ async def add_metrics_middleware(request: Request, call_next):
         response = await call_next(request)
         response_time = time.time() - start_time
 
-        await metrics.record_request(request.url.path, request.method, response_time)
+        metrics.record_request(request.url.path, request.method, response_time)
 
         # Add response time header and request ID
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
@@ -522,6 +551,17 @@ async def root():
 @app.get("/api", include_in_schema=False)
 async def api_root():
     return JSONResponse(await get_cached_api_root_payload())
+
+
+@app.get("/api/auth/verify", tags=["Auth"])
+async def verify_auth(user: User = Depends(get_current_user)):
+    """Verify the current Django session and return authenticated user details."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_active": user.is_active,
+        "email": user.email,
+    }
 
 
 @app.get("/api/docker/info", tags=["Docker"])

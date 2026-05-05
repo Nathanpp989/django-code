@@ -43,8 +43,8 @@ router = APIRouter()
 
 def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
     """Serialize a NewLLM instance to a dict."""
-    choices = entry.choices.all()
-    total_votes = choices.aggregate(total=Sum("amount"))["total"] or 0
+    choices = list(entry.choices.all())
+    total_votes = sum(c.amount for c in choices)
 
     data = {
         "id": entry.pk,
@@ -52,7 +52,7 @@ def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
         "llm_date_used": entry.llm_date_used,
         "created_at": entry.created_at,
         "updated_at": entry.updated_at,
-        "choice_count": choices.count(),
+        "choice_count": len(choices),
         "total_votes": total_votes,
         "was_published_recently": entry.was_published_recently(),
     }
@@ -65,7 +65,7 @@ def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
                 "amount": c.amount,
                 "created_at": c.created_at,
             }
-            for c in choices.order_by("-amount")
+            for c in sorted(choices, key=lambda c: c.amount, reverse=True)
         ]
 
     return data
