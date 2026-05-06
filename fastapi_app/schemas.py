@@ -57,7 +57,9 @@ class NewLLMCreate(BaseModel):
         # HTML escape and strip excessive whitespace
         sanitized = html.escape(v.strip())
         # Remove potential script injection attempts
-        sanitized = re.sub(r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL)
+        sanitized = re.sub(
+            r'<script[^>]*>.*?</script>', '', sanitized, flags=re.IGNORECASE | re.DOTALL
+        )
         return sanitized[:200]  # Enforce max length
 
     @validator('choices')

@@ -19,18 +19,16 @@ from django.db.models import Sum, F
 from django.db import transaction
 from typing import List, Optional
 import logging
+from asgiref.sync import sync_to_async
 
 from fastapi_app.auth import get_current_user
 from fastapi_app.logging_utils import (
     log_audit_trail, log_user_activity, get_client_ip, get_user_agent
 )
 from fastapi_app.schemas import (
-    NewLLMResponse,
-    NewLLMDetailResponse,
     NewLLMCreate,
     NewLLMUpdate,
     LLMChoiceCreate,
-    LLMChoiceResponse,
     VoteRequest,
     MessageResponse,
     PaginatedResponse,
@@ -39,6 +37,39 @@ from django_llm.models import NewLLM, LLMChoice, LLMSummary
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# Helper functions for async DB operations
+async def _create_llm_with_choices(llm_text: str, user: User, choices: List[str]) -> tuple:
+    """Create LLM entry and choices atomically."""
+    def _do_create():
+        entry = NewLLM.objects.create(llm_text=llm_text, created_by=user)
+        choice_count = 0
+        if choices:
+            for choice_text in choices:
+                choice_text = choice_text.strip()
+                if choice_text:
+                    LLMChoice.objects.create(new_llm=entry, choice_text=choice_text)
+                    choice_count += 1
+        return entry, choice_count
+
+    return await sync_to_async(_do_create, thread_sensitive=True)()
+
+
+async def _record_vote(llm_id: int, choice_id: int) -> tuple:
+    """Record a vote for a choice atomically."""
+    def _do_vote():
+        entry = NewLLM.objects.get(pk=llm_id)
+        with transaction.atomic():
+            choice = entry.choices.select_for_update().get(pk=choice_id)
+            choice.amount = F("amount") + 1
+            choice.save()
+            choice.refresh_from_db()
+        # Invalidate cache
+        LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
+        return entry, choice
+
+    return await sync_to_async(_do_vote, thread_sensitive=True)()
 
 
 def serialize_llm(entry: NewLLM, include_choices: bool = False) -> dict:
@@ -117,21 +148,15 @@ async def create_llm_entry(
     request: Request,
     user: User = Depends(get_current_user),
 ):
-    entry = NewLLM.objects.create(llm_text=payload.llm_text, created_by=user)
-    
-    choice_count = 0
-    if payload.choices:
-        for choice_text in payload.choices:
-            choice_text = choice_text.strip()
-            if choice_text:
-                LLMChoice.objects.create(new_llm=entry, choice_text=choice_text)
-                choice_count += 1
+    entry, choice_count = await _create_llm_with_choices(
+        payload.llm_text, user, payload.choices
+    )
 
     logger.info(
         f"User {user.username} created NewLLM pk={entry.pk} with {choice_count} choices",
         extra={"user_id": user.id, "llm_id": entry.pk}
     )
-    
+
     # Log audit trail for create
     await log_audit_trail(
         user=user,
@@ -143,15 +168,16 @@ async def create_llm_entry(
         user_agent=get_user_agent(request),
         status="success",
     )
-    
+
     # Log user activity
     await log_user_activity(
         user,
         "create_llm",
         {"llm_id": entry.pk, "choice_count": choice_count}
     )
-    
-    return serialize_llm(entry, include_choices=True)
+
+    result = await sync_to_async(serialize_llm, thread_sensitive=True)(entry, include_choices=True)
+    return result
 
 
 # -------------------------
@@ -203,14 +229,14 @@ async def update_llm_entry(
             f"Unauthorized update attempt: user={user.username}, llm_id={llm_id}",
             extra={"user_id": user.id, "llm_id": llm_id}
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this entry.",
         )
 
     old_text = entry.llm_text if payload.llm_text else None
-    
+
     if payload.llm_text:
         entry.llm_text = payload.llm_text
         entry.save()
@@ -219,7 +245,7 @@ async def update_llm_entry(
         f"User {user.username} updated NewLLM pk={llm_id}",
         extra={"user_id": user.id, "llm_id": llm_id}
     )
-    
+
     # Log audit trail for update
     await log_audit_trail(
         user=user,
@@ -234,7 +260,7 @@ async def update_llm_entry(
         user_agent=get_user_agent(request),
         status="success",
     )
-    
+
     return serialize_llm(entry, include_choices=True)
 
 
@@ -263,7 +289,7 @@ async def delete_llm_entry(
             f"Unauthorized delete attempt: user={user.username}, llm_id={llm_id}",
             extra={"user_id": user.id, "llm_id": llm_id}
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this entry.",
@@ -276,12 +302,12 @@ async def delete_llm_entry(
 
     LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
     entry.delete()
-    
+
     logger.warning(
         f"User {user.username} deleted NewLLM pk={llm_id}",
         extra={"user_id": user.id, "llm_id": llm_id}
     )
-    
+
     # Log audit trail for delete (compliance record)
     await log_audit_trail(
         user=user,
@@ -315,27 +341,17 @@ async def vote_for_choice(
     user: User = Depends(get_current_user),
 ):
     try:
-        entry = NewLLM.objects.get(pk=llm_id)
+        entry, choice = await _record_vote(llm_id, payload.choice_id)
     except NewLLM.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"LLM entry {llm_id} not found.",
         )
-
-    try:
-        with transaction.atomic():
-            choice = entry.choices.select_for_update().get(pk=payload.choice_id)
-            choice.amount = F("amount") + 1
-            choice.save()
-            choice.refresh_from_db()
     except LLMChoice.DoesNotExist:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Choice {payload.choice_id} not found in entry {llm_id}.",
         )
-
-    # Invalidate cached summary
-    LLMSummary.objects.filter(content_type="results", object_id=llm_id).delete()
 
     logger.info(
         f"User {user.username} voted for choice {payload.choice_id} "

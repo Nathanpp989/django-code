@@ -29,6 +29,9 @@ from fastapi import (
     Depends,
 )
 from django.contrib.sessions.backends.db import SessionStore
+from django.core.cache import cache
+from django.conf import settings
+from django.contrib.auth.models import User
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -42,7 +45,7 @@ from slowapi.middleware import SlowAPIMiddleware
 # Local imports (must be before django.setup())
 from fastapi_app.routers import llm, convert, chat, health
 from fastapi_app.logging_utils import (
-    generate_request_id, get_structured_logger, get_client_ip, RequestTimer
+    generate_request_id, get_structured_logger, get_client_ip
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,10 +53,11 @@ sys.path.insert(0, str(BASE_DIR))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "newsite.settings")
 django.setup()
 
-# Django imports (after django.setup())
-from django.core.cache import cache
-from django.conf import settings
-from django.contrib.auth.models import User
+# Local imports (after django.setup())
+from fastapi_app.routers import llm, convert, chat, health
+from fastapi_app.logging_utils import (
+    generate_request_id, get_structured_logger, get_client_ip
+)
 from fastapi_app.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -95,7 +99,9 @@ FASTAPI_VERSION = os.environ.get("FASTAPI_VERSION", "1.0.0")
 # Hide docs in production for security
 FASTAPI_DOCS_URL = os.environ.get("FASTAPI_DOCS_URL", "/api/docs" if settings.DEBUG else None)
 FASTAPI_REDOC_URL = os.environ.get("FASTAPI_REDOC_URL", "/api/redoc" if settings.DEBUG else None)
-FASTAPI_OPENAPI_URL = os.environ.get("FASTAPI_OPENAPI_URL", "/api/openapi.json" if settings.DEBUG else None)
+FASTAPI_OPENAPI_URL = os.environ.get(
+    "FASTAPI_OPENAPI_URL", "/api/openapi.json" if settings.DEBUG else None
+)
 
 FASTAPI_CORS_ALLOW_ORIGINS = parse_env_list(
     os.environ.get("FASTAPI_CORS_ALLOW_ORIGINS"),
@@ -168,7 +174,8 @@ async def cache_delete_pattern(pattern: str) -> None:
         logger.warning("Pattern cache deletion fallback failed: %s", exc)
 
     logger.warning(
-        "Cache backend does not support pattern deletes. Consider using django-redis for wildcard invalidation: %s",
+        "Cache backend does not support pattern deletes. "
+        "Consider using django-redis for wildcard invalidation: %s",
         pattern,
     )
 
@@ -370,7 +377,7 @@ app.state.limiter = limiter
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
-    
+
     logger.warning(
         f"HTTP Exception: {exc.status_code}",
         extra={
@@ -379,7 +386,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             "detail": exc.detail,
         }
     )
-    
+
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "type": "http_exception", "request_id": request_id},
@@ -389,7 +396,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
-    
+
     logger.warning(
         f"Validation Error: {len(exc.errors())} error(s)",
         extra={
@@ -398,7 +405,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "errors": str(exc.errors())[:200],  # Truncate for logging
         }
     )
-    
+
     return JSONResponse(
         status_code=422,
         content={"detail": exc.errors(), "type": "validation_error", "request_id": request_id},
@@ -409,16 +416,16 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
     client_ip = get_client_ip(request)
-    
+
     logger.warning(
-        f"Rate limit exceeded",
+        "Rate limit exceeded",
         extra={
             "request_id": request_id,
             "client_ip": client_ip,
             "limit_detail": str(exc),
         }
     )
-    
+
     return JSONResponse(
         status_code=429,
         content={"detail": "Rate limit exceeded", "type": "rate_limit", "request_id": request_id},
@@ -429,9 +436,9 @@ async def general_exception_handler(request: Request, exc: Exception):
     await metrics.record_error()
     request_id = getattr(request.state, 'request_id', 'unknown')
     client_ip = get_client_ip(request)
-    
+
     logger.error(
-        f"Unhandled exception",
+        "Unhandled exception",
         extra={
             "request_id": request_id,
             "client_ip": client_ip,
@@ -439,10 +446,14 @@ async def general_exception_handler(request: Request, exc: Exception):
         },
         exc_info=True
     )
-    
+
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "type": "server_error", "request_id": request_id},
+        content={
+            "detail": "Internal server error",
+            "type": "server_error",
+            "request_id": request_id
+        },
     )
 
 
@@ -460,7 +471,7 @@ async def add_metrics_middleware(request: Request, call_next):
     start_time = time.time()
     request_id = generate_request_id()
     request.state.request_id = request_id
-    
+
     # Set up request context
     client_ip = get_client_ip(request)
     structured_logger.set_request_context(request_id, ip_address=client_ip)
@@ -492,7 +503,7 @@ async def add_metrics_middleware(request: Request, call_next):
     except Exception as e:
         response_time = time.time() - start_time
         await metrics.record_request(request.url.path, request.method, response_time)
-        
+
         logger.error(
             f"{request.method} {request.url.path} - Exception",
             extra={
@@ -657,16 +668,7 @@ async def websocket_chat(websocket: WebSocket, user_id: int):
 
 
 # -------------------------
-# Startup/Shutdown Events
+# Lifespan and event handlers are configured in the lifespan context manager above
+# @app.on_event decorators are deprecated as of FastAPI 0.93.0
+# See: https://fastapi.tiangolo.com/advanced/events/
 # -------------------------
-
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("FastAPI application started")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("FastAPI application shutting down")
-    # Cleanup resources if needed

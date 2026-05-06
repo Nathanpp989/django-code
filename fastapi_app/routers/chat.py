@@ -11,7 +11,6 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from django.contrib.auth.models import User
 from django.db.models import Count, Q
-from typing import List
 import logging
 
 from fastapi_app.auth import get_current_user
@@ -19,9 +18,7 @@ from fastapi_app.logging_utils import (
     log_audit_trail, log_user_activity, get_client_ip, get_user_agent
 )
 from fastapi_app.schemas import (
-    ChatMessageResponse,
     ChatMessageCreate,
-    MessageResponse,
     PaginatedResponse,
 )
 from django_llm.models import ChatMessage
@@ -31,7 +28,6 @@ router = APIRouter()
 
 # Import Ollama and MCP client safely
 try:
-    from django_llm.mcp_client import MCPOllamaClient, OLLAMA_AVAILABLE
     from django_llm.prompts import CHAT_SYSTEM_PROMPT
 
     mcp_client = None
@@ -128,6 +124,7 @@ async def get_chat_history(
         "total_pages": (total + page_size - 1) // page_size,
         "results": [serialize_message(m) for m in messages],
     }
+    }
 
 
 # -------------------------
@@ -156,12 +153,13 @@ async def send_chat_message(
         "chat_message",
         {"message_length": len(payload.message)}
     )
-    
+
     # Save user message
     user_msg = ChatMessage.objects.create(user=user, role="user", content=payload.message)
-    
+
     logger.info(
-        f"Chat message created: user={user.username}, msg_id={user_msg.id}, length={len(payload.message)}",
+        f"Chat message created: user={user.username}, msg_id={user_msg.id}, "
+        f"length={len(payload.message)}",
         extra={"user_id": user.id, "message_id": user_msg.id}
     )
 
@@ -189,7 +187,7 @@ async def send_chat_message(
             user_agent=get_user_agent(request),
             status="failed",
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Ollama is not available. Start it with: ollama serve",
@@ -202,7 +200,7 @@ async def send_chat_message(
         )
     except Exception as e:
         logger.error(f"Chat API error for user {user.username}: {e}", exc_info=True)
-        
+
         # Log audit trail for failed chat
         await log_audit_trail(
             user=user,
@@ -214,7 +212,7 @@ async def send_chat_message(
             user_agent=get_user_agent(request),
             status="failed",
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"LLM error: {str(e)}",
@@ -224,12 +222,12 @@ async def send_chat_message(
     ai_message = ChatMessage.objects.create(
         user=user, role="assistant", content=ai_response
     )
-    
+
     logger.info(
         f"Chat response created: user={user.username}, msg_id={ai_message.id}",
         extra={"user_id": user.id, "message_id": ai_message.id}
     )
-    
+
     # Log successful chat to audit trail
     await log_audit_trail(
         user=user,
@@ -269,21 +267,21 @@ async def clear_chat_history(
 ):
     # Log activity before deletion
     message_count = ChatMessage.objects.filter(user=user).count()
-    
+
     await log_user_activity(
         user,
         "export",  # Reusing "export" activity type for data deletion
         {"message_count": message_count}
     )
-    
+
     # Delete messages
     deleted_count, _ = ChatMessage.objects.filter(user=user).delete()
-    
+
     logger.warning(
         f"User deleted {deleted_count} chat messages: user={user.username}",
         extra={"user_id": user.id, "deleted_count": deleted_count}
     )
-    
+
     # Log audit trail for deletion (compliance)
     await log_audit_trail(
         user=user,
@@ -294,5 +292,5 @@ async def clear_chat_history(
         user_agent=get_user_agent(request),
         status="success",
     )
-    
+
     return {"message": f"Cleared {deleted_count} messages.", "status": "success"}

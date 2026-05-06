@@ -13,12 +13,10 @@ import uuid
 import hashlib
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
-from collections import defaultdict
 
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.utils import timezone
 
 # Import models
 from django_llm.models import AuditLog, UserActivity
@@ -32,7 +30,7 @@ class StructuredLogger:
         self.request_context = {}
 
     def set_request_context(self, request_id: str, user: Optional[User] = None,
-                           ip_address: Optional[str] = None):
+                            ip_address: Optional[str] = None):
         """Set context for current request."""
         self.request_context = {
             'request_id': request_id,
@@ -96,10 +94,10 @@ class BruteForceDetector:
     async def record_failed_attempt(identifier: str, attempt_type: str = "auth") -> Dict[str, Any]:
         """Record a failed auth attempt and check if user should be locked out."""
         cache_key = BruteForceDetector._get_cache_key(identifier, attempt_type)
-        
+
         # Get current attempt count
         attempt_data = cache.get(cache_key, {"attempts": 0, "locked_until": None})
-        
+
         # Check if currently locked out
         if attempt_data.get("locked_until"):
             locked_until = attempt_data["locked_until"]
@@ -112,7 +110,7 @@ class BruteForceDetector:
 
         # Increment attempts
         attempt_data["attempts"] += 1
-        
+
         # Check if should be locked out
         if attempt_data["attempts"] >= BruteForceDetector.MAX_ATTEMPTS:
             locked_until_dt = datetime.now() + timedelta(seconds=BruteForceDetector.LOCKOUT_DURATION)
@@ -121,12 +119,13 @@ class BruteForceDetector:
                 BruteForceDetector.ATTEMPT_WINDOW,
                 int((locked_until_dt - datetime.now()).total_seconds()) + 1,
             )
+            )
         else:
             timeout = BruteForceDetector.ATTEMPT_WINDOW
-        
+
         # Update cache
         cache.set(cache_key, attempt_data, timeout)
-        
+
         return {
             "locked": attempt_data["attempts"] >= BruteForceDetector.MAX_ATTEMPTS,
             "locked_until": attempt_data.get("locked_until"),
@@ -144,10 +143,10 @@ class BruteForceDetector:
         """Check if identifier is currently locked out."""
         cache_key = BruteForceDetector._get_cache_key(identifier, attempt_type)
         attempt_data = cache.get(cache_key, {})
-        
+
         if not attempt_data.get("locked_until"):
             return False
-        
+
         locked_until = datetime.fromisoformat(attempt_data["locked_until"])
         return locked_until > datetime.now()
 
@@ -158,9 +157,9 @@ class BruteForceDetector:
 
 @sync_to_async
 def log_audit_trail(user: Optional[User], action: str, resource_type: str,
-                   resource_id: Optional[int] = None, changes: Optional[Dict] = None,
-                   ip_address: Optional[str] = None, user_agent: Optional[str] = None,
-                   status: str = "success"):
+                    resource_id: Optional[int] = None, changes: Optional[Dict] = None,
+                    ip_address: Optional[str] = None, user_agent: Optional[str] = None,
+                    status: str = "success"):
     """Log an action to the audit trail."""
     try:
         AuditLog.objects.create(
@@ -206,11 +205,11 @@ def get_client_ip(request) -> str:
     x_forwarded_for = request.headers.get('x-forwarded-for')
     if x_forwarded_for:
         return x_forwarded_for.split(',')[0].strip()
-    
+
     x_real_ip = request.headers.get('x-real-ip')
     if x_real_ip:
         return x_real_ip.strip()
-    
+
     return request.client[0] if request.client else "unknown"
 
 
@@ -223,7 +222,7 @@ def get_password_hash(password: str, salt: Optional[str] = None) -> str:
     """Hash a password for logging purposes (not authentication)."""
     if not salt:
         salt = hashlib.sha256(password.encode()).hexdigest()[:8]
-    
+
     hashed = hashlib.sha256(f"{password}{salt}".encode()).hexdigest()
     return f"sha256:{salt}:{hashed[:8]}..."
 
@@ -234,7 +233,7 @@ def get_password_hash(password: str, salt: Optional[str] = None) -> str:
 
 class RequestTimer:
     """Track request processing time."""
-    
+
     def __init__(self, request_id: str, endpoint: str):
         self.request_id = request_id
         self.endpoint = endpoint

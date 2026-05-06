@@ -10,8 +10,10 @@ Or via Makefile:
 
 import os
 import sys
-import pytest
-import json
+from fastapi.testclient import TestClient
+from django.contrib.auth.models import User
+from django.test import TestCase
+from django_llm.models import NewLLM, ConvertLLM, LLMChoice, ChatMessage
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "newsite.settings")
 if os.getcwd() not in sys.path:
@@ -19,11 +21,6 @@ if os.getcwd() not in sys.path:
 
 import django
 django.setup()
-
-from fastapi.testclient import TestClient
-from django.contrib.auth.models import User
-from django.test import TestCase
-from django_llm.models import NewLLM, ConvertLLM, LLMChoice, ChatMessage
 
 
 # -------------------------
@@ -41,7 +38,6 @@ def get_auth_headers(client, username="testuser", password="testpass123!"):
     Create a test user and return headers with a valid session cookie.
     Since we share Django sessions, we need to create a real Django session.
     """
-    from django.test import Client as DjangoClient
     from django.contrib.sessions.backends.db import SessionStore
 
     # Create user if not exists

@@ -21,7 +21,6 @@ from fastapi_app.logging_utils import (
     log_audit_trail, log_user_activity, get_client_ip, get_user_agent
 )
 from fastapi_app.schemas import (
-    ConvertLLMResponse,
     ConvertLLMCreate,
     ConvertLLMUpdate,
     PaginatedResponse,
@@ -105,6 +104,7 @@ async def list_conversions(
         "total_pages": (total + page_size - 1) // page_size,
         "results": [serialize_convert(e) for e in entries],
     }
+    }
 
 
 @router.post(
@@ -121,12 +121,12 @@ async def create_conversion(
     entry = ConvertLLM.objects.create(
         new_string=payload.input_string, new_number=len(payload.input_string), created_by=user
     )
-    
+
     logger.info(
         f"User {user.username} created ConvertLLM pk={entry.pk}",
         extra={"user_id": user.id, "convert_id": entry.pk}
     )
-    
+
     # Log audit trail for create
     await log_audit_trail(
         user=user,
@@ -138,14 +138,14 @@ async def create_conversion(
         user_agent=get_user_agent(request),
         status="success",
     )
-    
+
     # Log user activity
     await log_user_activity(
         user,
         "create_llm",
         {"convert_id": entry.pk, "string_length": len(payload.input_string)}
     )
-    
+
     return serialize_convert(entry)
 
 
@@ -198,7 +198,7 @@ async def update_conversion(
             f"Unauthorized update attempt: user={user.username}, convert_id={convert_id}",
             extra={"user_id": user.id, "convert_id": convert_id}
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to update this entry.",
@@ -216,7 +216,7 @@ async def update_conversion(
         f"User {user.username} updated ConvertLLM pk={convert_id}",
         extra={"user_id": user.id, "convert_id": convert_id}
     )
-    
+
     # Log audit trail for update
     await log_audit_trail(
         user=user,
@@ -228,7 +228,7 @@ async def update_conversion(
         user_agent=get_user_agent(request),
         status="success",
     )
-    
+
     return serialize_convert(entry)
 
 
@@ -257,7 +257,7 @@ async def delete_conversion(
             f"Unauthorized delete attempt: user={user.username}, convert_id={convert_id}",
             extra={"user_id": user.id, "convert_id": convert_id}
         )
-        
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this entry.",
@@ -266,15 +266,15 @@ async def delete_conversion(
     # Store deletion info for audit log
     deleted_length = entry.new_number
     summary_count = LLMSummary.objects.filter(content_type="convert", object_id=convert_id).count()
-    
+
     LLMSummary.objects.filter(content_type="convert", object_id=convert_id).delete()
     entry.delete()
-    
+
     logger.warning(
         f"User {user.username} deleted ConvertLLM pk={convert_id}",
         extra={"user_id": user.id, "convert_id": convert_id}
     )
-    
+
     # Log audit trail for delete (compliance record)
     await log_audit_trail(
         user=user,

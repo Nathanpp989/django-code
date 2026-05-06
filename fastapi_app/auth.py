@@ -35,7 +35,7 @@ async def get_current_user(request: Request) -> User:
         @router.get("/protected")
         async def protected(user: User = Depends(get_current_user)):
             return {"username": user.username}
-    
+
     Includes brute force detection for invalid sessions.
     """
     session_key = request.cookies.get("sessionid")
@@ -54,7 +54,7 @@ async def get_current_user(request: Request) -> User:
         # Track failed auth attempts
         await BruteForceDetector.record_failed_attempt(client_ip, "auth")
         logger.warning(f"Auth failed: No session key from {client_ip}")
-        
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Please log in via the Django interface.",
@@ -69,18 +69,20 @@ async def get_current_user(request: Request) -> User:
         if not user_id:
             await BruteForceDetector.record_failed_attempt(client_ip, "auth")
             logger.warning(f"Auth failed: Invalid session from {client_ip}")
-            
+
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Session expired or invalid. Please log in again.",
             )
 
-        user = await sync_to_async(User.objects.select_related().get, thread_sensitive=True)(pk=user_id)
+        user = await sync_to_async(
+            User.objects.select_related().get, thread_sensitive=True
+        )(pk=user_id)
 
         if not user.is_active:
             await BruteForceDetector.record_failed_attempt(client_ip, "auth")
             logger.warning(f"Auth blocked: Inactive user {user.username} from {client_ip}")
-            
+
             # Log audit trail for suspicious activity
             await log_audit_trail(
                 user=user,
@@ -90,7 +92,7 @@ async def get_current_user(request: Request) -> User:
                 user_agent=user_agent,
                 status="failed",
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User account is disabled.",
@@ -98,9 +100,9 @@ async def get_current_user(request: Request) -> User:
 
         # Clear any failed attempts on successful auth
         await BruteForceDetector.record_success(client_ip, "auth")
-        
+
         logger.info(f"Auth success: User {user.username} from {client_ip}")
-        
+
         # Log successful session auth
         await log_audit_trail(
             user=user,
@@ -110,13 +112,15 @@ async def get_current_user(request: Request) -> User:
             user_agent=user_agent,
             status="success",
         )
-        
+
         return user
 
     except User.DoesNotExist:
         await BruteForceDetector.record_failed_attempt(client_ip, "auth")
-        logger.warning(f"Auth failed: User not found, session {session_key[:8]}... from {client_ip}")
-        
+        logger.warning(
+            f"Auth failed: User not found, session {session_key[:8]}... from {client_ip}"
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found. Please log in again.",
@@ -126,7 +130,7 @@ async def get_current_user(request: Request) -> User:
     except Exception as e:
         await BruteForceDetector.record_failed_attempt(client_ip, "auth")
         logger.error(f"Session auth error from {client_ip}: {e}", exc_info=True)
-        
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed.",
